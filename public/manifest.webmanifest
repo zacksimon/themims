@@ -1,0 +1,11 @@
+{
+  "name": "The Mims",
+  "short_name": "Mims",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#2b2350",
+  "theme_color": "#2b2350",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
