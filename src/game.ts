@@ -15,6 +15,7 @@ import { moodOf } from './sim/needs';
 import { PieMenu, PieOption } from './ui/pieMenu';
 import { MimPanel } from './ui/mimPanel';
 import { h } from './ui/dom';
+import { BuildController, Mode } from './ui/buildMode';
 
 /** Wires simulation, rendering, input and UI together. */
 export class Game implements SceneSource {
@@ -30,6 +31,9 @@ export class Game implements SceneSource {
   private now = 0;
   readonly pie: PieMenu;
   readonly panel: MimPanel;
+  readonly build: BuildController;
+  private liveSpeed = 1;
+  private roomBefore = new Map<number, number>();
   private tooltip = h('div', { class: 'tooltip panel', style: 'display:none' });
   private tooltipUntil = 0;
   private keys = new Set<string>();
@@ -49,6 +53,12 @@ export class Game implements SceneSource {
     this.panel = new MimPanel(this);
     this.uiRoot.append(this.panel.root, this.tooltip);
     this.pie = new PieMenu(this.uiRoot);
+    this.build = new BuildController(this);
+    this.uiRoot.append(this.build.sheet);
+    const modes: [Mode, string, string][] = [['live', '🏠', 'Live'], ['buy', '🛋️', 'Buy'], ['build', '🔨', 'Build']];
+    for (const [m, icon, label] of modes) {
+      this.hud.modeGroup.append(h('button', { 'data-mode': m, title: `${label} mode`, onclick: () => this.setMode(m) }, icon, h('span', { class: 'lbl2' }, label)));
+    }
     this.gestures = new GestureRecognizer((g) => this.onGesture(g));
     this.bindInput(canvas);
     window.addEventListener('resize', () => this.renderer.resize(this.camera));
@@ -63,12 +73,47 @@ export class Game implements SceneSource {
   }
 
   setSpeed(i: number): void {
+    if (i > 0 && this.build?.active) {
+      this.hud.toast('Time stays paused while you build. Head back to Live mode to play.', 'info', 2200);
+      return;
+    }
     this.speedIndex = i;
     this.loop.speed = SPEEDS[i];
   }
 
   setWallMode(m: WallMode): void {
     this.renderer.wallMode = m;
+  }
+
+  get mode(): Mode {
+    return this.build.mode;
+  }
+
+  /** Build and buy pause time; going back to live restores the previous speed and lets Mims react to changes. */
+  setMode(m: Mode): void {
+    const prev = this.build.mode;
+    if (prev === m) return;
+    this.pie.close();
+    this.hideTooltip();
+    if (prev === 'live') {
+      this.liveSpeed = this.speedIndex || 1;
+      this.setSpeed(0);
+      this.roomBefore = new Map(this.world.mims.map((mm) => [mm.id, this.world.roomScoreAt(mm.x, mm.y)]));
+    }
+    this.build.setMode(m);
+    if (m === 'live') {
+      this.build.builder.clearUndo();
+      this.setSpeed(this.liveSpeed);
+      for (const mm of this.world.mims) {
+        const before = this.roomBefore.get(mm.id);
+        const after = this.world.roomScoreAt(mm.x, mm.y);
+        if (before !== undefined && after >= before + 8) {
+          this.world.notify(`${mm.name} notices the room got nicer. "Pim-shawa!"`, 'good');
+          mm.thought = { icon: '✨', until: this.world.time + 5 };
+        }
+      }
+    }
+    this.hud.modeGroup.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.getAttribute('data-mode') === m));
   }
 
   get selected(): Mim | undefined {
@@ -86,6 +131,7 @@ export class Game implements SceneSource {
       defOf(o).draw(p, o, this.now);
       out.push(...p.out);
     }
+    out.push(...this.build.drawables(v));
     for (const m of this.world.mims) {
       const a = m.queue[0];
       const act = a?.phase === 'use' && a.kind === 'interact' ? a.ix : undefined;
@@ -101,6 +147,7 @@ export class Game implements SceneSource {
   }
 
   groundOverlay(ctx: CanvasRenderingContext2D, v: View): void {
+    this.build.groundOverlay(ctx, v);
     const mk = this.marker;
     if (mk && this.now < mk.until) {
       const a = (mk.until - this.now) / 700;
@@ -109,7 +156,9 @@ export class Game implements SceneSource {
   }
 
   overlay(ctx: CanvasRenderingContext2D, v: View): void {
-    const sel = this.selected;
+    this.build.overlay(ctx, v);
+    this.build.floorLabel(ctx);
+    const sel = this.build.active ? undefined : this.selected;
     if (sel) drawSelection(ctx, v, sel.x, sel.y, this.now, sel.pose === 'lie' ? 1.3 : sel.pose === 'sit' ? 2.0 : 2.1);
     for (const m of this.world.mims) {
       if (!m.thought) continue;
@@ -265,7 +314,8 @@ export class Game implements SceneSource {
     const fade = this.camera.update(now);
     this.renderer.frame(this.camera, this, fade);
     this.hud.update();
-    this.panel.update();
+    if (this.build.active) this.panel.root.style.display = 'none';
+    else this.panel.update();
   }
 
   /** Keyboard panning, scaled by frame time so it moves at the same speed on 60 Hz and 120 Hz displays. */
@@ -343,6 +393,7 @@ export class Game implements SceneSource {
         this.setSpeed(this.speedIndex === 0 ? 1 : 0);
       } else if (k >= '0' && k <= '3') this.setSpeed(+k);
       else this.keys.add(k);
+      if (this.build.onKey(k, e)) return;
       this.onKey(k, e);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
@@ -371,8 +422,9 @@ export class Game implements SceneSource {
   }
 
   /** Mode-specific gesture handling; return true to consume the gesture. */
-  protected handleGesture(_g: Gesture): boolean {
-    return false;
+  protected handleGesture(g: Gesture): boolean {
+    if (this.pie.open) return false;
+    return this.build.gesture(g);
   }
 
   protected onKey(_k: string, _e: KeyboardEvent): void {}

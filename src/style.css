@@ -101,3 +101,40 @@ button:disabled { opacity: 0.45; }
 .need .bar { margin-top: 2px; }
 .fw { font-size: 13px; display: flex; align-items: center; gap: 6px; min-height: 32px; }
 .fw input { width: 20px; height: 20px; }
+
+/* Mode buttons */
+.lbl2 { font-size: 13px; }
+@media (max-width: 600px) { .lbl2 { display: none; } }
+
+/* Build / buy bottom sheet */
+.sheet {
+  position: absolute; left: calc(8px + var(--safe-l)); right: calc(68px + var(--safe-r)); bottom: calc(8px + var(--safe-b));
+  max-width: 900px; padding: 8px; display: flex; flex-direction: row; gap: 6px; align-items: stretch;
+}
+.sheet-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sheet > .undo { flex: none; flex-direction: column; gap: 0; min-width: 56px; box-shadow: none; background: rgba(43, 35, 80, 0.06); }
+.sheet > .undo .ti { font-size: 22px; line-height: 1.1; }
+.sheet > .undo .lbl2 { display: inline; font-size: 11px; }
+.sheet-row { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.sheet-row::-webkit-scrollbar { height: 6px; }
+.sheet-row > button { flex: none; box-shadow: none; background: rgba(43, 35, 80, 0.06); }
+.sheet-row > button.on { background: var(--ink); color: #fff; }
+.tools button { flex-direction: column; gap: 0; padding: 4px 10px; min-width: 56px; }
+.tools .ti { font-size: 20px; line-height: 1.1; }
+.tools .lbl2 { font-size: 11px; }
+.items { padding-bottom: 2px; }
+.card { flex-direction: column; width: 104px; min-height: 128px; padding: 6px; gap: 2px; border-radius: 14px; text-align: center; }
+.card img { width: 72px; height: 72px; }
+.card .nm { font-size: 11px; line-height: 1.15; max-height: 2.4em; overflow: hidden; }
+.card .pr { font-weight: bold; font-size: 13px; }
+.card.poor { opacity: 0.5; }
+.swatches .sw { flex-direction: column; gap: 2px; padding: 4px 6px; min-width: 52px; font-size: 11px; }
+.swatches .sw i { display: block; width: 30px; height: 22px; border-radius: 6px; border: 3px solid rgba(0, 0, 0, 0.15); }
+.swatches .sw.on { outline: 3px solid var(--accent); background: rgba(43, 35, 80, 0.06); color: inherit; }
+.hintrow { font-size: 13px; color: var(--muted); padding: 4px 6px; min-height: 32px; }
+.placing img { width: 48px; height: 48px; }
+.placing .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.placing small { font-size: 12px; color: var(--muted); }
+.placing .hint { white-space: normal; }
+.placing button { font-size: 20px; }
+.placing button.ok { background: #4cb87a; color: #fff; }

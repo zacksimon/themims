@@ -85,3 +85,109 @@ export default async function scenario(page, { name, out, touch }) {
   await page.waitForTimeout(200);
   await shot('4-day-later');
 }
+
+/** M3: build and buy modes. Phone drags use real touch events through the DevTools protocol. */
+export async function buildBuy(page, { name, out, touch }) {
+  const shot = (s) => page.screenshot({ path: `${out}${name}-${s}.png` });
+  const tapAt = async (x, y) => (touch ? page.touchscreen.tap(x, y) : page.mouse.click(x, y));
+  const cdp = touch ? await page.context().newCDPSession(page) : null;
+  const drag = async (x0, y0, x1, y1, midShot) => {
+    const steps = 8;
+    if (touch) {
+      const pt = (x, y) => [{ x, y, id: 1, radiusX: 4, radiusY: 4, force: 1 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(x0, y0) });
+      for (let i = 1; i <= steps; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(x0 + ((x1 - x0) * i) / steps, y0 + ((y1 - y0) * i) / steps) });
+        await page.waitForTimeout(16);
+      }
+      if (midShot) await shot(midShot);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } else {
+      await page.mouse.move(x0, y0);
+      await page.mouse.down();
+      for (let i = 1; i <= steps; i++) {
+        await page.mouse.move(x0 + ((x1 - x0) * i) / steps, y0 + ((y1 - y0) * i) / steps);
+        await page.waitForTimeout(16);
+      }
+      if (midShot) await shot(midShot);
+      await page.mouse.up();
+    }
+    await page.waitForTimeout(80);
+  };
+  const scr = (x, y, z = 0) => page.evaluate(([x, y, z]) => window.game.screenOf(x, y, z), [x, y, z]);
+  const state = () => page.evaluate(() => ({ funds: window.game.world.funds, objs: window.game.world.objects.length, walls: window.game.world.lot.walls.size, speed: window.game.speedIndex }));
+
+  await page.evaluate(() => { const g = window.game; g.setSpeed(2); g.camera.setRot(0); g.camera.zoom = g.camera.w < 600 ? 0.75 : 1; g.camera.cx = 15; g.camera.cy = 9; g.world.freeWill = false; });
+
+  // ---- Buy mode ----
+  await page.click('[data-mode="buy"]');
+  let st = await state();
+  if (st.speed !== 0) throw new Error('buy mode should pause time');
+  await page.waitForTimeout(150);
+  await shot('5-buy-catalog');
+  await page.click('[data-buy="fern"]');
+  const [fx, fy] = await scr(15.5, 7.5);
+  await tapAt(fx, fy);
+  if (touch) {
+    await shot('6-buy-ghost');
+    await page.click('.placing .ok');
+  }
+  await page.waitForTimeout(100);
+  let after = await state();
+  if (after.objs !== st.objs + 1 || after.funds !== st.funds - 90) throw new Error(`buying failed: ${JSON.stringify([st, after])}`);
+  if (!touch) await page.keyboard.press('Escape');
+  else await page.click('.placing button[aria-label="Cancel"]');
+
+  // sell it again via the object menu (full refund within the hour)
+  const [sx, sy] = await scr(15.5, 7.5, 0.7);
+  await tapAt(sx, sy);
+  await page.waitForSelector('.pie-item');
+  await page.waitForTimeout(400);
+  const sell = await page.locator('.pie-item:has-text("Sell")').boundingBox();
+  await tapAt(sell.x + sell.width / 2, sell.y + sell.height / 2);
+  await page.waitForTimeout(100);
+  after = await state();
+  if (after.objs !== st.objs || after.funds !== st.funds) throw new Error(`selling failed: ${JSON.stringify([st, after])}`);
+
+  // ---- Build mode: a shed on the lawn ----
+  await page.click('[data-mode="build"]');
+  await page.evaluate(() => { const c = window.game.camera; c.cx = 20.5; c.cy = 6; });
+  await page.waitForTimeout(100);
+  st = await state();
+  await page.click('[data-tool="wall"]').catch(() => {});
+  if (!(await page.evaluate(() => window.game.build.tool === 'wall'))) await page.click('[data-tool="wall"]');
+  const [a0, a1] = await scr(19, 3);
+  const [b0, b1] = await scr(19, 8);
+  await drag(a0, a1, b0, b1, '7-build-wall-preview');
+  after = await state();
+  if (after.walls !== st.walls + 5) throw new Error(`wall drag added ${after.walls - st.walls} walls`);
+  // floor rectangle
+  await page.click('[data-tool="floor"]');
+  const [c0, c1] = await scr(19.5, 3.5);
+  const [d0, d1] = await scr(21.5, 7.5);
+  await drag(c0, c1, d0, d1);
+  const floored = await page.evaluate(() => window.game.world.lot.floor(20, 5));
+  if (floored < 0) throw new Error('floor drag did nothing');
+  // door on the new wall
+  await page.click('[data-tool="door"]');
+  const [e0, e1] = await scr(19, 5.5, 1.2);
+  await tapAt(e0, e1);
+  const door = await page.evaluate(() => window.game.world.lot.walls.get('v:19:5')?.kind);
+  if (door !== 'door') throw new Error(`door not placed: ${door}`);
+  await page.waitForTimeout(100);
+  await shot('8-build-done');
+  // undo three times: door, floor, walls
+  for (let i = 0; i < 3; i++) await page.click('.undo');
+  after = await state();
+  if (after.walls !== st.walls || after.funds !== st.funds) throw new Error(`undo failed: ${JSON.stringify([st, after])}`);
+
+  // ---- Back to live: time resumes ----
+  // Undo must be visible (not scrolled away) on every screen size
+  const undoBox = await page.locator('.sheet > .undo').boundingBox();
+  const vp = page.viewportSize();
+  if (!undoBox || undoBox.x + undoBox.width > vp.width || undoBox.x < 0) throw new Error('undo button is off-screen');
+  await shot('9-build-undo-pinned');
+  await page.click('[data-mode="live"]');
+  if ((await state()).speed === 0) throw new Error('live mode should resume time');
+  if (await page.evaluate(() => window.game.build.builder.canUndo)) throw new Error('undo history should clear when returning to live');
+}

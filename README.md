@@ -25,6 +25,12 @@ npm run e2e        # browser smoke test on phone + desktop (after build), screen
 | Zoom | Pinch | Wheel or trackpad pinch, `+`/`-` |
 | Rotate camera | Two-finger twist or ⟲ ⟳ buttons | `Q`/`E` |
 | Speed | Speed buttons | `1`-`3`, space to pause |
+| Buy furniture | 🛋️ Buy, pick an item, tap a spot (drag to adjust), ✓ | Buy, pick an item, click to place |
+| Rotate while placing | ⟳ button | `,` and `.` |
+| Move, rotate or sell | In Buy mode, tap the object | In Buy mode, click the object |
+| Build walls / floors | 🔨 Build, pick a tool, drag | Same, with the mouse (right-drag pans) |
+| Doors, windows, paint | Pick the tool, tap a wall | Click a wall |
+| Undo | Undo button | Ctrl+Z |
 
 ## Deploy
 

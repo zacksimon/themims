@@ -66,6 +66,50 @@ export class World {
     return o;
   }
 
+  /** Stop every action that targets or sits on an object (it is being moved, sold or undone away). */
+  abortActionsFor(objId: number): void {
+    for (const m of this.mims) {
+      for (const a of [...m.queue]) {
+        if (a.objId !== objId && a.slotObj !== objId) continue;
+        if (a === m.queue[0]) this.finish(m, a, false);
+        else m.queue.splice(m.queue.indexOf(a), 1);
+      }
+    }
+  }
+
+  /** Drop actions whose objects no longer exist and clear stale reservations (after undo). */
+  revalidateActions(): void {
+    for (const m of this.mims) {
+      for (const a of [...m.queue]) {
+        const gone = (a.objId !== undefined && !this.obj(a.objId)) || (a.slotObj !== undefined && !this.obj(a.slotObj));
+        if (!gone) continue;
+        if (a === m.queue[0]) {
+          a.slotObj = undefined;
+          this.finish(m, a, false);
+        } else m.queue.splice(m.queue.indexOf(a), 1);
+      }
+    }
+    for (const o of this.objects) {
+      o.reserved = o.reserved.map((id) => (this.mims.some((m) => m.id === id && m.queue[0]?.slotObj === o.id) ? id : 0));
+    }
+  }
+
+  /** Walls or objects changed: re-route anyone mid-walk, and cancel what can no longer be reached. */
+  structureChanged(): void {
+    this.objVersion++;
+    for (const m of this.mims) {
+      if (!m.path.length) continue;
+      const goal = m.path[m.path.length - 1];
+      const path = findPath(this.lot, mimTile(m), [goal], { blocked: this.isBlocked });
+      if (path) m.path = path.slice(1);
+      else {
+        m.path = [];
+        const a = m.queue[0];
+        if (a) this.finish(m, a, false);
+      }
+    }
+  }
+
   notify(text: string, kind: 'info' | 'good' | 'bad' = 'info'): void {
     this.outbox.push({ text, kind });
   }
