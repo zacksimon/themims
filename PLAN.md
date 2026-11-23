@@ -6,7 +6,7 @@ A browser-based life simulation with a playful, satirical tone. You guide a hous
 
 | Area | Choice |
 | --- | --- |
-| View | 2D isometric, drawn on HTML canvas |
+| View | 2D isometric, drawn on HTML canvas, camera rotates between 4 fixed stops |
 | Art | Procedural shapes in code for v1, built so sprites can be swapped in later |
 | Stack | TypeScript + Vite, static site, no server |
 | Saves | Browser storage (IndexedDB), versioned and autosaved |
@@ -38,7 +38,7 @@ src/
   world/
     grid.ts          lot tiles, wall segments on tile edges, doors, floors
     iso.ts           world <-> screen projection, picking
-    camera.ts        pan, zoom, rotation in 90 degree steps
+    camera.ts        pan, zoom, rotation between 4 stops (90 degree steps)
     pathfinding.ts   A* on tiles, respects walls and doors, path caching
     render/          depth sorting, wall cutaway modes, procedural drawing of Mims and objects
   sim/
@@ -66,6 +66,19 @@ tests/               Vitest unit tests and headless sim runs
 Keeping the simulation independent of rendering lets us run thousands of in-game days headlessly to tune balance, and keeps a later art swap contained to `world/render`.
 
 ## Key systems
+
+### Camera
+The camera views the lot from one of four fixed corners (northeast, southeast, southwest, northwest), 90 degrees apart.
+
+- **Controls:** `Q` and `E` (plus on-screen arrow buttons in the HUD) rotate left and right; drag or arrow keys/WASD to pan; mouse wheel or `+`/`-` to zoom across three or four fixed zoom levels so procedural art stays crisp.
+- **Rotation around the view center:** Rotating keeps whatever tile is in the middle of the screen in the middle, so you don't lose your place.
+- **Short transition:** A quick (around 200 ms) fade or swing between stops, so the change reads clearly without needing true 3D. Input is ignored during the transition.
+- **One projection function:** The sim always works in world coordinates. `iso.ts` applies the current rotation when converting world to screen and back, so pathfinding, saves and game logic never know which way the camera faces.
+- **Drawing per facing:** Mims and objects store a world facing (N/E/S/W). The renderer combines that with the camera rotation to pick which of four views to draw, so a couch facing the TV still looks right from every corner. Procedural drawing functions take a view direction argument from the start, which keeps sprite art swappable later (four views per object).
+- **Depth sorting and picking:** Draw order and click detection are recomputed from rotated coordinates, with tests that click the same tile from all four rotations and get the same result.
+- **Walls follow the camera:** Cutaway mode lowers the walls nearest the camera, so which walls drop changes with each rotation.
+- **Build mode:** Placement previews, rotating an object (`,` and `.` keys) and wall dragging all work in screen-relative terms, so "rotate clockwise" feels the same from any corner.
+- **Saved with the game:** The current rotation, pan and zoom are stored in the save so you return to the same view.
 
 ### Needs and mood
 Eight needs, each 0 to 100: **Hunger, Energy, Hygiene, Bladder, Fun, Social, Comfort, Room** (how pleasant the surroundings are). Each decays at its own rate, with modifiers (sleeping slows hunger, work drains energy). Mood is a weighted sum where low needs weigh more heavily, so one desperate need drags mood down sharply. Thresholds trigger thought bubbles, then complaints, then mishaps.
@@ -102,7 +115,7 @@ Versioned JSON schema stored in IndexedDB, several save slots, autosave each in-
 
 | # | Milestone | Done when |
 | --- | --- | --- |
-| M0 | Skeleton | Vite + TS project, canvas renders an isometric lot, camera pan/zoom/rotate, game clock with speed controls |
+| M0 | Skeleton | Vite + TS project, canvas renders an isometric lot, camera pan/zoom and rotation between 4 stops (picking verified from every rotation), game clock with speed controls |
 | M1 | A Mim walks | Procedurally drawn Mim, click a tile to walk there via A*, walls block movement |
 | M2 | Needs + objects | 8 needs decaying, ~10 objects with interactions, pie menu, action queue, free will toggle |
 | M3 | Build/buy | Walls, floors, doors, catalog, funds, sell/move/undo, wall cutaway |
