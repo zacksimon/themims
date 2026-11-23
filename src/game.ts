@@ -16,6 +16,7 @@ import { PieMenu, PieOption } from './ui/pieMenu';
 import { MimPanel } from './ui/mimPanel';
 import { h } from './ui/dom';
 import { BuildController, Mode } from './ui/buildMode';
+import { MimAudio } from './audio/voice';
 
 /** Wires simulation, rendering, input and UI together. */
 export class Game implements SceneSource {
@@ -32,6 +33,9 @@ export class Game implements SceneSource {
   readonly pie: PieMenu;
   readonly panel: MimPanel;
   readonly build: BuildController;
+  readonly audio = new MimAudio();
+  private lastVoice = new Map<number, number>();
+  private settingsPop: HTMLElement | null = null;
   private liveSpeed = 1;
   private roomBefore = new Map<number, number>();
   private tooltip = h('div', { class: 'tooltip panel', style: 'display:none' });
@@ -55,6 +59,9 @@ export class Game implements SceneSource {
     this.pie = new PieMenu(this.uiRoot);
     this.build = new BuildController(this);
     this.uiRoot.append(this.build.sheet);
+    this.hud.modeGroup.parentElement!.append(
+      h('button', { class: 'panel gear', title: 'Sound', 'aria-label': 'Sound settings', onclick: () => this.toggleSettings() }, '🔊'),
+    );
     const modes: [Mode, string, string][] = [['live', '🏠', 'Live'], ['buy', '🛋️', 'Buy'], ['build', '🔨', 'Build']];
     for (const [m, icon, label] of modes) {
       this.hud.modeGroup.append(h('button', { 'data-mode': m, title: `${label} mode`, onclick: () => this.setMode(m) }, icon, h('span', { class: 'lbl2' }, label)));
@@ -124,6 +131,74 @@ export class Game implements SceneSource {
     this.selectedId = id;
   }
 
+  /** Select a Mim and bring the camera to them (portrait taps). */
+  focusMim(id: number): void {
+    const m = this.world.mim(id);
+    if (!m) return;
+    this.select(id);
+    this.camera.cx = m.x;
+    this.camera.cy = m.y;
+    this.camera.clamp();
+  }
+
+  private toggleSettings(): void {
+    if (this.settingsPop) {
+      this.settingsPop.remove();
+      this.settingsPop = null;
+      return;
+    }
+    const a = this.audio;
+    this.audio.unlock();
+    this.settingsPop = h('div', { class: 'settings-pop panel' },
+      h('b', {}, 'Sound'),
+      h('label', {}, 'Volume', h('input', { type: 'range', min: '0', max: '1', step: '0.05', value: String(a.settings.volume), 'aria-label': 'Volume', oninput: (e: Event) => a.setVolume(+(e.target as HTMLInputElement).value) })),
+      h('label', {}, h('input', { type: 'checkbox', checked: a.settings.muted ? 'checked' : undefined, onchange: (e: Event) => a.setMuted((e.target as HTMLInputElement).checked) }), 'Mute'),
+      h('small', { style: 'color:var(--muted)' }, 'Every Mim has their own voice. Only those near the middle of the screen talk out loud.'),
+    );
+    this.uiRoot.append(this.settingsPop);
+  }
+
+  /** Voice the Mimlish lines the sim produced, favoring Mims near the middle of the screen. */
+  private voiceSpeech(now: number): void {
+    const events = this.world.speechOut.splice(0);
+    if (!this.audio.ready || this.speedIndex === 0 || this.build.active) return;
+    const v = this.camera;
+    const maxD = Math.hypot(v.w, v.h) / 2;
+    for (const e of events) {
+      const m = this.world.mim(e.mimId);
+      if (!m) continue;
+      if (now - (this.lastVoice.get(m.id) ?? 0) < 900) continue;
+      const [sx, sy] = worldToScreen(v, m.x, m.y, 1.5);
+      if (sx < -40 || sy < -40 || sx > v.w + 40 || sy > v.h + 40) continue;
+      const d = Math.hypot(sx - v.w / 2, sy - v.h / 2) / maxD;
+      if (d > 0.85) continue;
+      const gain = (0.35 + 0.65 * Math.min(1, v.zoom)) * (1 - d * 0.6);
+      if (this.audio.babble(m.voice, e.emotion, e.syllables, (sx - v.w / 2) / (v.w / 2), gain) > 0) this.lastVoice.set(m.id, now);
+    }
+  }
+
+  /** Pie menu of social interactions with another Mim, plus switching selection to them. */
+  openMimMenu(target: Mim, sx: number, sy: number): void {
+    const m = this.selected;
+    if (!m) return;
+    const opts: PieOption[] = [{ label: `Select ${target.name.split(' ')[0]}`, icon: '👆', onSelect: () => this.select(target.id) }];
+    const busy = !this.world.available(target);
+    for (const { def, ok, why } of this.world.socialOptions(m, target)) {
+      if (!ok && (def.maxRel !== undefined || def.needsMusic)) continue; // hide options that need a specific situation
+      opts.push({
+        label: def.label,
+        icon: def.icon,
+        disabled: !ok || busy,
+        hint: busy ? `${target.name} is busy` : why,
+        onSelect: () => {
+          if (!this.world.queueSocial(m, target, def.id)) this.hud.toast(`${m.name}'s to-do list is full.`, 'bad', 2500);
+        },
+      });
+    }
+    this.hideTooltip();
+    this.pie.show(sx, sy, target.name, opts);
+  }
+
   drawables(v: View): Drawable[] {
     const out: Drawable[] = [];
     for (const o of this.world.objects) {
@@ -161,9 +236,10 @@ export class Game implements SceneSource {
     const sel = this.build.active ? undefined : this.selected;
     if (sel) drawSelection(ctx, v, sel.x, sel.y, this.now, sel.pose === 'lie' ? 1.3 : sel.pose === 'sit' ? 2.0 : 2.1);
     for (const m of this.world.mims) {
-      if (!m.thought) continue;
-      const head = m.pose === 'lie' ? 1.1 : m.pose === 'sit' ? 1.8 : 2.0;
-      drawBubble(ctx, v, m.x, m.y, head + m.z + (m === sel ? 0.7 : 0), m.thought.icon);
+      const head = (m.pose === 'lie' ? 1.1 : m.pose === 'sit' ? 1.8 : 2.0) + m.z + (m === sel ? 0.7 : 0);
+      const speaking = m.speech && m.speech.until > this.world.time;
+      if (speaking) drawBubble(ctx, v, m.x, m.y, head, m.speech!.icon, 'speech');
+      if (m.thought) drawBubble(ctx, v, m.x, m.y, head + (speaking ? 1.3 : 0), m.thought.icon);
     }
   }
 
@@ -273,7 +349,9 @@ export class Game implements SceneSource {
   tap(sx: number, sy: number): void {
     const hit = this.mimAt(sx, sy);
     if (hit) {
-      this.select(hit.id);
+      const sel = this.selected;
+      if (sel && sel !== hit) this.openMimMenu(hit, sx, sy);
+      else this.select(hit.id);
       return;
     }
     const o = this.objAt(sx, sy);
@@ -306,6 +384,7 @@ export class Game implements SceneSource {
   private render(now: number): void {
     this.now = now;
     for (const t of this.world.outbox.splice(0)) this.hud.toast(t.text, t.kind);
+    this.voiceSpeech(now);
     if (this.tooltip.style.display !== 'none' && now > this.tooltipUntil) this.tooltip.style.display = 'none';
     this.gestures.tick(now);
     const dt = this.lastFrame ? Math.min(100, now - this.lastFrame) : 16.7;
@@ -365,6 +444,9 @@ export class Game implements SceneSource {
     const send = (e: PointerEvent, kind: 'down' | 'move' | 'up' | 'cancel') => {
       this.gestures.handle({ id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), kind, pointer: e.pointerType, button: e.button });
     };
+    // audio may only start after a user gesture
+    window.addEventListener('pointerdown', () => this.audio.unlock(), { capture: true });
+    window.addEventListener('keydown', () => this.audio.unlock(), { capture: true });
     canvas.addEventListener('pointerdown', (e) => {
       canvas.setPointerCapture(e.pointerId);
       send(e, 'down');

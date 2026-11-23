@@ -1,6 +1,8 @@
 import { Look } from '../content/looks';
 import { Tile } from '../world/pathfinding';
 import { Needs, fullNeeds } from './needs';
+import { Voice, voiceFromSeed } from '../content/voices';
+import type { Emotion } from '../content/social';
 
 export type Pose = 'stand' | 'walk' | 'sit' | 'lie';
 
@@ -9,7 +11,7 @@ export const MAX_QUEUE = 6;
 
 export interface Action {
   uid: number;
-  kind: 'interact' | 'goto' | 'eat';
+  kind: 'interact' | 'goto' | 'eat' | 'social';
   objId?: number;
   ix?: string;
   tile?: Tile;
@@ -29,6 +31,16 @@ export interface Action {
   chained?: boolean;
   /** For eating: hunger restored over the meal. */
   food?: number;
+  /** Social: the other Mim, which interaction, and whether it was accepted. */
+  targetMim?: number;
+  social?: string;
+  accepted?: boolean;
+  /** Re-route attempts when a social target wanders off. */
+  tries?: number;
+  /** Minutes spent waiting for an occupied object, or chasing a moving social target. */
+  waited?: number;
+  /** Social: chase time at the last re-path. */
+  repathAt?: number;
 }
 
 export interface Mim {
@@ -57,12 +69,17 @@ export interface Mim {
   fwTimer: number;
   /** Object ids this Mim recently failed to reach, with the time to retry. */
   unreachable: Record<number, number>;
+  voice: Voice;
+  /** Speech bubble (social), separate from thought bubbles. */
+  speech?: { icon: string; until: number; emotion: Emotion };
+  /** Held in conversation by another Mim: stand still and face them. */
+  engaged?: { with: number; until: number };
 }
 
 export function createMim(id: number, name: string, look: Look, tx: number, ty: number): Mim {
   return {
     id, name, look, x: tx + 0.5, y: ty + 0.5, z: 0, fx: 0, fy: 1, pose: 'stand', path: [], anim: 0,
-    needs: fullNeeds(), queue: [], fwTimer: 1, unreachable: {},
+    needs: fullNeeds(), queue: [], fwTimer: 1, unreachable: {}, voice: voiceFromSeed(`${name}#${id}`),
   };
 }
 

@@ -40,10 +40,57 @@ export function buildStarterHouse(w: World): void {
   w.addObject('boombox', 11, 14, 2);
   w.addObject('fern', 5, 14, 0);
   w.addObject('lava_lamp', 11, 9, 0);
+  w.addObject('phone', 5, 10, 3);
   // bedroom
   w.addObject('bed_single', 6, 5, 0);
+  w.addObject('bed_single', 8, 5, 0);
+  // spare room, now Gus's and Pim's
+  w.addObject('bed_single', 14, 5, 0);
+  w.addObject('bed_single', 16, 5, 0);
   w.addObject('fern', 10, 8, 0);
   // bathroom
   w.addObject('toilet', 11, 5, 0);
   w.addObject('shower', 13, 5, 0);
+}
+
+import { Look } from './looks';
+import type { Voice } from './voices';
+import { voiceFromSeed } from './voices';
+
+interface Member {
+  name: string;
+  look: Look;
+  at: [number, number];
+  voice: Partial<Voice>;
+}
+
+/** The Fumblewicks, as described in CONTENT.md, with their distinct voices. */
+export const FUMBLEWICKS: Member[] = [
+  {
+    name: 'Bartley Fumblewick', at: [9, 12],
+    look: { skin: '#eab68c', hair: '#5a3a22', hairStyle: 'bob', shirt: '#4f7fd9', pants: '#3a3f5c', height: 1.05 },
+    voice: { pitch: 150, rate: 5.2, wave: 'triangle', formant: 0.95, range: 0.15 },
+  },
+  {
+    name: 'Dotty Fumblewick', at: [10, 12],
+    look: { skin: '#f6d3b3', hair: '#b33a2c', hairStyle: 'bun', shirt: '#5cc8a8', pants: '#283048', height: 0.97 },
+    voice: { pitch: 250, rate: 8.2, wave: 'sawtooth', formant: 1.15, range: 0.22 },
+  },
+  {
+    name: 'Gus Fumblewick', at: [14, 11],
+    look: { skin: '#9a6440', hair: '#2b1d14', hairStyle: 'spiky', shirt: '#f2c14e', pants: '#5a4632', height: 1.0 },
+    voice: { pitch: 110, rate: 4.6, wave: 'square', formant: 0.85, range: 0.1 },
+  },
+  {
+    name: 'Pim Fumblewick', at: [7, 13],
+    look: { skin: '#c98b5e', hair: '#e8e8e8', hairStyle: 'mohawk', shirt: '#e8e8e8', pants: '#3a3a4a', height: 0.92 },
+    voice: { pitch: 300, rate: 7.4, wave: 'triangle', formant: 1.2, range: 0.32 },
+  },
+];
+
+export function addFumblewicks(w: World): void {
+  for (const f of FUMBLEWICKS) {
+    const m = w.addMim(f.name, f.look, f.at[0], f.at[1]);
+    m.voice = { ...voiceFromSeed(f.name), ...f.voice };
+  }
 }

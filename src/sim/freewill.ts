@@ -1,14 +1,18 @@
 import { OBJECTS, InteractionDef } from '../content/objects';
 import { NEEDS, NeedDelta, urgency } from './needs';
 import { hourOf } from '../engine/clock';
+import type { SocialDef } from '../content/social';
+import { moodOf } from './needs';
 import type { Mim } from './mim';
 import type { ObjInst } from './objects';
 import { defOf, objCenter } from './objects';
 import type { World } from './world';
 
 export interface Choice {
-  obj: ObjInst;
-  ix: InteractionDef;
+  obj?: ObjInst;
+  ix?: InteractionDef;
+  mim?: Mim;
+  social?: SocialDef;
   score: number;
 }
 
@@ -57,7 +61,45 @@ export function scoreChoices(w: World, m: Mim): Choice[] {
       out.push({ obj: o, ix, score: s });
     }
   }
+  out.push(...socialChoices(w, m));
   return out.sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Social options toward other household members. Friendly options scale with how much the Mim wants Social and
+ * how likely the other Mim is to accept; mean ones only come up between Mims who already dislike each other.
+ */
+function socialChoices(w: World, m: Mim): Choice[] {
+  const out: Choice[] = [];
+  if (m.needs.social >= 75) return out;
+  const mood = moodOf(m.needs);
+  for (const t of w.mims) {
+    if (t === m || !w.available(t, m)) continue;
+    const dist = Math.hypot(t.x - m.x, t.y - m.y);
+    const r = w.rel(m.id, t.id);
+    // Pick what to do with this Mim by weighted chance (for variety), then score that one option.
+    const options = w.socialOptions(m, t).filter(({ def, ok }) => ok && (!def.mean || (r.daily < -20 && mood < 0)));
+    if (!options.length) continue;
+    const likelyOf = (d: SocialDef) => (d.accept >= 1 ? 1 : Math.max(0.1, Math.min(0.95, d.accept + r.daily / 200)));
+    const total = options.reduce((a, o) => a + o.def.weight * likelyOf(o.def), 0);
+    let roll = w.rng.next() * total;
+    let def = options[0].def;
+    for (const o of options) {
+      roll -= o.def.weight * likelyOf(o.def);
+      if (roll <= 0) {
+        def = o.def;
+        break;
+      }
+    }
+    const adv: NeedDelta = {};
+    for (const k in def.rates) adv[k as keyof NeedDelta] = (def.rates[k as keyof NeedDelta] ?? 0) * (def.minutes / 60);
+    // closer friends are more appealing company
+    let s = utility(m, adv) * likelyOf(def) * (1 + Math.max(0, r.daily) / 100);
+    if (s <= 0) continue;
+    s /= 1 + dist / 18;
+    out.push({ mim: t, social: def, score: s });
+  }
+  return out;
 }
 
 /** Pick something to do. Top choices are weighted so behavior feels alive and a little irrational. */

@@ -151,14 +151,14 @@ describe('free will', () => {
     const { w, m } = house();
     m.needs.bladder = 5;
     const c = chooseAutonomous(w, m)!;
-    expect(c.obj.def).toBe('toilet');
+    expect(c.obj?.def).toBe('toilet');
   });
 
   it('a tired Mim heads to bed', () => {
     const { w, m } = house();
     m.needs = { ...fullNeeds(85), energy: 8 };
     const c = chooseAutonomous(w, m)!;
-    expect(c.obj.def).toBe('bed_single');
+    expect(c.obj?.def).toBe('bed_single');
   });
 
   it('a lone Mim with free will looks after itself for 3 days', () => {
