@@ -165,6 +165,7 @@ export class Game implements SceneSource {
       this.showTooltip(sx, sy, def.name, def.desc);
       return;
     }
+    this.hideTooltip();
     this.pie.show(sx, sy, def.name, opts);
   }
 
@@ -177,7 +178,13 @@ export class Game implements SceneSource {
     this.tooltipUntil = performance.now() + ms;
   }
 
+  hideTooltip(): void {
+    this.tooltip.style.display = 'none';
+    this.tooltipUntil = 0;
+  }
+
   private hover(sx: number, sy: number): void {
+    if (this.pie.open) return;
     const o = this.objAt(sx, sy);
     const m = this.mimAt(sx, sy);
     if (m) {

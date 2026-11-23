@@ -7,7 +7,7 @@ import { InteractionDef, OBJECTS } from '../content/objects';
 import { Dir, ObjInst, createObj, defOf, footprintTiles, localTile, objCenter, objLocalToWorld, objTiles } from './objects';
 import { DECAY, NEEDS, NEED_INFO, Need, addNeeds, clampNeed, worstNeed } from './needs';
 import { RoomInfo, computeRooms } from './rooms';
-import { chooseAutonomous, findIx } from './freewill';
+import { advertised, chooseAutonomous, findIx } from './freewill';
 
 export interface Notice {
   text: string;
@@ -324,7 +324,7 @@ export class World {
   }
 
   private runAction(m: Mim, a: Action, dt: number): void {
-    if (a.cancel && a.phase !== 'use' && a.phase !== 'exit') return this.finish(m, a, false);
+    if (a.cancel && a.phase !== 'use') return this.finish(m, a, false);
     switch (a.phase) {
       case 'pending':
         return this.begin(m, a);
@@ -338,8 +338,6 @@ export class World {
       }
       case 'use':
         return this.use(m, a, dt);
-      case 'exit':
-        return this.finish(m, a, !a.cancel);
     }
   }
 
@@ -431,12 +429,14 @@ export class World {
     let done = false;
     if (ix.minutes !== undefined && a.t >= ix.minutes) done = true;
     if (ix.untilFull && (m.needs[ix.untilFull] >= 99.5 || a.t >= (ix.maxMinutes ?? 120))) done = true;
-    // Desperate needs interrupt autonomous activities that don't help them.
-    if (a.auto && !done && a.t > 3) {
+    // Desperate needs interrupt autonomous activities that don't help them. Chained chore steps (cooking) are
+    // already serving a need, so they always finish.
+    if (a.auto && !a.chained && !done && a.t > 3) {
       // Only urgent bodily needs interrupt; a lonely Mim still finishes their nap.
       const urgent = (['bladder', 'hunger', 'energy'] as Need[]).filter((k) => m.needs[k] < 12 && !(ix.sleep && k === 'energy'));
       const need = urgent.sort((p, q) => m.needs[p] - m.needs[q])[0];
-      if (need && !(ix.rates?.[need] && ix.rates[need]! > 0) && ix.untilFull !== need) {
+      const helps = (ix.rates?.[need] ?? 0) > 0 || (advertised(ix)[need] ?? 0) > 0 || ix.untilFull === need;
+      if (need && !helps) {
         this.think(m, NEED_INFO[need].icon);
         a.cancel = true;
       }

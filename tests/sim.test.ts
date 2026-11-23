@@ -178,3 +178,28 @@ describe('free will', () => {
     expect(moodSum / samples).toBeGreaterThan(0);
   });
 });
+
+describe('regressions', () => {
+  it('a starving Mim with free will eats within 2 hours instead of looping on cooking', () => {
+    const { w, m } = house(3);
+    m.needs.hunger = 8;
+    let ate = false;
+    for (let t = 0; t < 120; t += 0.25) {
+      w.step(0.25);
+      if (m.queue[0]?.kind === 'eat' && m.queue[0].phase === 'use') ate = true;
+    }
+    expect(ate).toBe(true);
+    expect(m.needs.hunger).toBeGreaterThan(40);
+  });
+
+  it('hunger dropping below the urgent line mid-cook does not cancel the chore', () => {
+    const { w, m } = house(5);
+    w.freeWill = false;
+    m.needs.hunger = 13;
+    const fridge = w.objects.find((o) => o.def === 'fridge_basic')!;
+    w.queueInteraction(m, fridge, 'cook', true);
+    w.freeWill = true;
+    for (let t = 0; t < 90; t += 0.25) w.step(0.25);
+    expect(m.needs.hunger).toBeGreaterThan(50);
+  });
+});

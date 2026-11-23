@@ -32,6 +32,7 @@ export default async function scenario(page, { name, out, touch }) {
   await page.waitForSelector('.pie-item');
   await page.waitForTimeout(250);
   await shot('1-pie');
+  if (await page.evaluate(() => getComputedStyle(document.querySelector('.tooltip')).display !== 'none')) throw new Error('tooltip covers the pie menu');
   if ((await page.evaluate(() => window.game.world.mims[0].queue.length)) !== 0) throw new Error('opening tap selected an option');
   await page.waitForTimeout(250);
   const btn = await page.locator('.pie-item:has-text("Use")').boundingBox();

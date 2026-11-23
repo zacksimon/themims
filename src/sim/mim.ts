@@ -15,7 +15,7 @@ export interface Action {
   tile?: Tile;
   /** Chosen by free will (true) or queued by the player (false). */
   auto: boolean;
-  phase: 'pending' | 'walk' | 'use' | 'exit';
+  phase: 'pending' | 'walk' | 'use';
   /** The slot actually used, which may belong to a seat rather than the target. */
   slotObj?: number;
   slot?: number;

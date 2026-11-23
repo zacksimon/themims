@@ -110,7 +110,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
     price: 400, category: 'kitchen', size: [1, 1], height: 1.1,
     slots: [{ routes: FRONT, pose: 'stand', face: [0.5, 0.5] }],
     interactions: [
-      { id: 'cookfood', label: 'Cook', icon: '🍳', minutes: 10, hidden: true, auto: false, carry: 'pan', done: (w, m) => w.queueEat(m, 70, m.queue[0]?.auto ?? true) },
+      { id: 'cookfood', label: 'Cook', icon: '🍳', minutes: 10, adv: { hunger: 60 }, hidden: true, auto: false, carry: 'pan', done: (w, m) => w.queueEat(m, 70, m.queue[0]?.auto ?? true) },
     ],
     draw: (p, o) => {
       p.box(0.06, 0.1, 0.94, 0.94, 0, 1.0, '#d9d4cc');
