@@ -16,7 +16,8 @@ npm run e2e        # browser smoke test on phone + desktop (after build), screen
 
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |
-| Select a Mim | Tap the Mim | Click the Mim |
+| Select a Mim | Tap the Mim or their portrait | Click the Mim or their portrait |
+| Socialize | With a Mim selected, tap another Mim | Same, with a click |
 | Use an object | Tap it, then pick from the pie menu | Click it, then pick |
 | Object or Mim info | Long-press | Hover |
 | Cancel an action | Tap its icon in the queue | Click its icon |
@@ -31,6 +32,7 @@ npm run e2e        # browser smoke test on phone + desktop (after build), screen
 | Build walls / floors | 🔨 Build, pick a tool, drag | Same, with the mouse (right-drag pans) |
 | Doors, windows, paint | Pick the tool, tap a wall | Click a wall |
 | Undo | Undo button | Ctrl+Z |
+| Sound | 🔊 button (volume, mute) | Same |
 
 ## Deploy
 

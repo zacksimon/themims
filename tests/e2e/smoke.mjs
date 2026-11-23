@@ -21,7 +21,7 @@ await new Promise((res) => {
 });
 
 const mod = await import('./scenario.mjs');
-const scenario = async (page, o) => { await mod.default(page, o); await mod.buildBuy(page, o); };
+const scenario = async (page, o) => { await mod.default(page, o); await mod.buildBuy(page, o); await mod.household(page, o); };
 let failed = false;
 const browser = await chromium.launch();
 try {

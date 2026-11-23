@@ -38,6 +38,36 @@ export class PieMenu {
         if (performance.now() - this.openedAt > 150) this.close();
       },
     });
+    // Long menus (social options) don't fit on a ring on phones: show a compact two-column list instead.
+    if (n > 8) {
+      const cols = vw < 520 ? 2 : 3;
+      const w = Math.min(vw - 16, cols * 168 + 16);
+      const rows = Math.ceil(n / cols);
+      const hgt = Math.min(vh - 120, 48 + rows * 52);
+      const left = Math.min(vw - w - 8, Math.max(8, x - w / 2));
+      const top = Math.min(vh - hgt - 8, Math.max(64, y - hgt / 2));
+      const list = h('div', { class: 'pie-list panel', role: 'menu', 'aria-label': title, style: `left:${left}px;top:${top}px;width:${w}px;max-height:${hgt}px;grid-template-columns:repeat(${cols},1fr)` });
+      list.append(h('div', { class: 'pie-list-title' }, title));
+      for (const o of options) {
+        list.append(
+          h('button', {
+            class: 'pie-item',
+            role: 'menuitem',
+            disabled: o.disabled,
+            title: o.hint,
+            onclick: (e: Event) => {
+              e.stopPropagation();
+              if (performance.now() - this.openedAt < 350) return;
+              this.close();
+              o.onSelect();
+            },
+          }, h('span', { class: 'pie-ic' }, o.icon), o.label),
+        );
+      }
+      this.root = h('div', { class: 'pie-root' }, backdrop, list);
+      this.host.append(this.root);
+      return;
+    }
     const ring = h('div', { class: 'pie', style: `left:${cx}px;top:${cy}px`, role: 'menu', 'aria-label': title });
     ring.append(h('div', { class: 'pie-title panel' }, title));
     options.forEach((o, i) => {

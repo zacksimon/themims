@@ -154,8 +154,8 @@ describe('builder: buy mode', () => {
     buildStarterHouse(w);
     const b = new Builder(w);
     const before = w.roomScoreAt(15, 7);
-    b.buy('fern', 15, 6, 0);
-    b.buy('lava_lamp', 16, 6, 0);
+    b.buy('fern', 14, 8, 0);
+    b.buy('lava_lamp', 16, 8, 0);
     expect(w.roomScoreAt(15, 7)).toBeGreaterThan(before + 10);
   });
 });

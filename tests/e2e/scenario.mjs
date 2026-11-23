@@ -191,3 +191,84 @@ export async function buildBuy(page, { name, out, touch }) {
   if ((await state()).speed === 0) throw new Error('live mode should resume time');
   if (await page.evaluate(() => window.game.build.builder.canUndo)) throw new Error('undo history should clear when returning to live');
 }
+
+/** M4: household, social interactions, relationships, voices. */
+export async function household(page, { name, out, touch }) {
+  const shot = (s) => page.screenshot({ path: `${out}${name}-${s}.png` });
+  const tapAt = async (x, y) => (touch ? page.touchscreen.tap(x, y) : page.mouse.click(x, y));
+  // The Mim panel re-renders when needs change, so look the element up fresh and retry briefly.
+  const tapEl = async (sel) => {
+    for (let i = 0; i < 10; i++) {
+      const b = await page.locator(sel).first().boundingBox().catch(() => null);
+      if (b) return tapAt(b.x + b.width / 2, b.y + b.height / 2);
+      await page.waitForTimeout(50);
+    }
+    throw new Error(`could not tap ${sel}`);
+  };
+  await page.evaluate(() => {
+    const g = window.game, w = g.world;
+    g.setSpeed(0);
+    w.freeWill = false;
+    for (const m of w.mims) for (const a of [...m.queue]) w.cancelAction(m, a.uid);
+    for (let t = 0; t < 2; t += 0.25) w.step(0.25);
+    g.camera.setRot(0);
+    g.camera.zoom = g.camera.w < 600 ? 1 : 1.5;
+  });
+  // four portraits in the household strip
+  const n = await page.locator('.household .pp').count();
+  if (n !== 4) throw new Error(`expected 4 household portraits, got ${n}`);
+  // select Dotty from her portrait: the camera centers on her
+  await tapEl('.household .pp >> nth=1');
+  const sel = await page.evaluate(() => window.game.selected?.name);
+  if (!sel?.startsWith('Dotty')) throw new Error(`portrait selected ${sel}`);
+  // put Bartley next to the living room and tap him for the social pie
+  await page.evaluate(() => {
+    const w = window.game.world;
+    const [b, d] = [w.mims[0], w.mims[1]];
+    b.x = 9.5; b.y = 12.5; d.x = 6.5; d.y = 13.5;
+    window.game.camera.cx = 8; window.game.camera.cy = 13;
+  });
+  await page.waitForTimeout(150);
+  const [bx, by] = await page.evaluate(() => window.game.screenOf(9.5, 12.5, 1.0));
+  await tapAt(bx, by);
+  await page.waitForSelector('.pie-item');
+  await page.waitForTimeout(400);
+  await shot('10-social-pie');
+  const labels = await page.locator('.pie-item').allInnerTexts();
+  if (!labels.some((l) => l.includes('Chat')) || !labels.some((l) => l.includes('Select'))) throw new Error(`social pie: ${labels}`);
+  const hugDisabled = await page.locator('.pie-item:has-text("Hug")').isDisabled();
+  if (!hugDisabled) throw new Error('hug should need a better relationship');
+  await tapEl('.pie-item:has-text("Chat")');
+  const q = await page.evaluate(() => window.game.world.mims[1].queue.map((a) => a.kind));
+  if (q[0] !== 'social') throw new Error(`queue after chat: ${q}`);
+  // run the chat and catch it mid-conversation
+  const rel0 = await page.evaluate(() => window.game.world.rel(window.game.world.mims[0].id, window.game.world.mims[1].id).daily);
+  await page.evaluate(() => {
+    const w = window.game.world;
+    w.rng.next = (() => { const r = w.rng.next.bind(w.rng); return () => Math.min(r(), 0.3); })(); // make acceptance likely
+    for (let t = 0; t < 7; t += 0.25) w.step(0.25);
+  });
+  await page.waitForTimeout(120);
+  await shot('11-chatting');
+  const engaged = await page.evaluate(() => !!window.game.world.mims[0].engaged);
+  if (!engaged) throw new Error('Bartley should be held in conversation');
+  await page.evaluate(() => { const w = window.game.world; for (let t = 0; t < 12; t += 0.25) w.step(0.25); });
+  const rel1 = await page.evaluate(() => window.game.world.rel(window.game.world.mims[0].id, window.game.world.mims[1].id).daily);
+  if (!(rel1 > rel0)) throw new Error(`relationship did not grow: ${rel0} -> ${rel1}`);
+  // Friends tab (expand the panel first on phones)
+  if (await page.locator('.mimpanel .collapse:has-text("▴")').count()) await tapEl('.mimpanel .collapse');
+  await tapEl('[data-tab="friends"]');
+  const friends = await page.locator('.friend').count();
+  if (friends !== 3) throw new Error(`friends list has ${friends}`);
+  await shot('12-friends');
+  // sound: settings popover and a real babble through Web Audio
+  await tapEl('.gear');
+  await page.waitForSelector('.settings-pop');
+  const played = await page.evaluate(async () => {
+    const g = window.game;
+    for (let i = 0; i < 20 && !g.audio.ready; i++) await new Promise((r) => setTimeout(r, 50));
+    return g.audio.babble(g.world.mims[2].voice, 'question', 4);
+  });
+  if (!(played > 0)) throw new Error('voice did not play');
+  await tapEl('.gear');
+}

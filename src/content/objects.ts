@@ -131,7 +131,7 @@ export const OBJECTS: Record<string, ObjectDef> = {
     id: 'sink', name: 'Mostly Clean Sink', desc: 'Pre-stained for your convenience.',
     price: 300, category: 'kitchen', size: [1, 1], height: 1.1,
     slots: [{ routes: FRONT, pose: 'stand', face: [0.5, 0.5] }],
-    interactions: [{ id: 'wash', label: 'Wash Hands', icon: '🫧', minutes: 3, rates: { hygiene: 80 }, adv: { hygiene: 4 }, want: { need: 'hygiene', below: 85 } }],
+    interactions: [{ id: 'wash', label: 'Wash Hands', icon: '🫧', minutes: 3, rates: { hygiene: 80 }, adv: { hygiene: 4 }, want: { need: 'hygiene', below: 45 } }],
     draw: (p) => {
       p.box(0.05, 0.1, 0.95, 0.95, 0, 0.9, '#9fb7c9');
       p.box(0, 0.05, 1, 1, 0.9, 1.02, '#ece6dc');
@@ -260,6 +260,19 @@ export const OBJECTS: Record<string, ObjectDef> = {
       p.box(0.15, 0.3, 0.85, 0.7, 0.18, 0.62, o?.state.on ? '#ff7a59' : '#c95c5c');
       p.box(0.2, 0.7, 0.42, 0.72, 0.25, 0.55, '#2a2a33', 0.01);
       p.box(0.58, 0.7, 0.8, 0.72, 0.25, 0.55, '#2a2a33', 0.01);
+    },
+  }),
+  phone: def({
+    id: 'phone', name: 'Yellow Phone', desc: 'Rings at dinner. Every time.',
+    price: 75, category: 'living', size: [1, 1], height: 1.1,
+    slots: [{ routes: SIDES, pose: 'stand', face: [0.5, 0.5] }],
+    interactions: [
+      { id: 'call', label: 'Call a Friend', icon: '📞', minutes: 25, rates: { social: 70, fun: 12 }, adv: { social: 22 }, want: { need: 'social', below: 60 } },
+    ],
+    draw: (p) => {
+      p.box(0.3, 0.3, 0.7, 0.7, 0, 0.8, '#7a4a2a');
+      p.box(0.3, 0.38, 0.7, 0.66, 0.8, 0.95, '#f2c14e');
+      p.box(0.32, 0.4, 0.68, 0.5, 0.95, 1.05, '#e0ab2c', 0.01);
     },
   }),
   fern: def({

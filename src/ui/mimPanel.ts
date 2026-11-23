@@ -2,6 +2,7 @@ import { NEEDS, NEED_INFO, moodOf } from '../sim/needs';
 import type { Game } from '../game';
 import { clear, h } from './dom';
 import { Look } from '../content/looks';
+import { relLabel } from '../content/social';
 
 /** Draw a Mim's head into a small canvas for portraits. */
 export function drawPortrait(c: HTMLCanvasElement, look: Look, mood: number): void {
@@ -66,6 +67,8 @@ export function needColor(v: number): string {
 export class MimPanel {
   readonly root = h('div', { class: 'mimpanel panel' });
   private collapsed = window.innerWidth < 600;
+  private tab: 'needs' | 'friends' = 'needs';
+  private portraits = new Map<number, HTMLCanvasElement>();
   private lastKey = '';
   private portrait = h('canvas', { class: 'portrait' });
 
@@ -81,7 +84,10 @@ export class MimPanel {
     this.root.style.display = '';
     const mood = moodOf(m.needs);
     const queueKey = m.queue.map((a) => `${a.uid}${a.cancel ? 'x' : ''}`).join(',');
-    const key = `${m.id}|${Math.round(mood / 4)}|${NEEDS.map((k) => Math.round(m.needs[k])).join(',')}|${queueKey}|${w.freeWill}|${this.collapsed}`;
+    const others = w.mims.filter((o) => o !== m);
+    const relKeyStr = others.map((o) => Math.round(w.rel(m.id, o.id).daily)).join(',');
+    const houseKey = w.mims.map((o) => `${o.id}:${Math.round(moodOf(o.needs) / 10)}`).join(',');
+    const key = `${m.id}|${Math.round(mood / 4)}|${NEEDS.map((k) => Math.round(m.needs[k])).join(',')}|${queueKey}|${w.freeWill}|${this.collapsed}|${this.tab}|${relKeyStr}|${houseKey}`;
     if (key === this.lastKey) return;
     this.lastKey = key;
     clear(this.root);
@@ -110,7 +116,46 @@ export class MimPanel {
       h('div', { class: 'mp-name' }, h('b', {}, m.name), h('div', { class: 'moodbar', title: `Mood ${Math.round(mood)}` }, h('i', { style: `width:${moodPct}%;background:${needColor(moodPct)}` }))),
       h('button', { class: 'collapse', 'aria-label': this.collapsed ? 'Show needs' : 'Hide needs', onclick: () => { this.collapsed = !this.collapsed; this.lastKey = ''; this.update(); } }, this.collapsed ? '▴' : '▾'),
     );
+    // household strip: tap a portrait to select that Mim and center the camera on them
+    const strip = h('div', { class: 'household', role: 'tablist', 'aria-label': 'Household' });
+    for (const o of w.mims) {
+      let c = this.portraits.get(o.id);
+      if (!c) {
+        c = h('canvas', {});
+        this.portraits.set(o.id, c);
+      }
+      const om = moodOf(o.needs);
+      drawPortrait(c, o.look, om);
+      strip.append(
+        h('button', { class: `pp${o === m ? ' on' : ''}`, title: o.name, 'aria-label': `Select ${o.name}`, 'data-mim': o.id, style: `--ring:${needColor((om + 100) / 2)}`, onclick: () => this.game.focusMim(o.id) }, c),
+      );
+    }
+    if (w.mims.length > 1) this.root.append(strip);
     this.root.append(head, queue);
+    if (!this.collapsed && w.mims.length > 1) {
+      this.root.append(
+        h('div', { class: 'tabs2' },
+          h('button', { class: this.tab === 'needs' ? 'on' : '', onclick: () => { this.tab = 'needs'; this.lastKey = ''; this.update(); } }, 'Needs'),
+          h('button', { class: this.tab === 'friends' ? 'on' : '', 'data-tab': 'friends', onclick: () => { this.tab = 'friends'; this.lastKey = ''; this.update(); } }, 'Friends'),
+        ),
+      );
+    }
+    if (!this.collapsed && this.tab === 'friends' && others.length) {
+      const list = h('div', { class: 'friends' });
+      for (const o of others) {
+        const r = w.rel(m.id, o.id);
+        const pct = Math.abs(r.daily) / 2;
+        list.append(
+          h('div', { class: 'friend', title: `Today ${Math.round(r.daily)} · Lifetime ${Math.round(r.life)}` },
+            h('b', {}, o.name.split(' ')[0]),
+            h('span', { class: 'rl' }, relLabel(r.daily)),
+            h('div', { class: 'relbar' }, h('i', { style: r.daily >= 0 ? `left:50%;width:${pct}%;background:#4cb87a` : `right:50%;width:${pct}%;background:#d94b3b` })),
+          ),
+        );
+      }
+      this.root.append(list);
+      return;
+    }
     if (!this.collapsed) {
       const grid = h('div', { class: 'needs' });
       for (const k of NEEDS) {

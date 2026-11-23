@@ -21,7 +21,7 @@ export const DECAY: Record<Need, number> = {
   hygiene: 3.5,
   bladder: 8.5,
   fun: 5,
-  social: 3,
+  social: 4.5,
   comfort: 6,
   room: 0,
 };

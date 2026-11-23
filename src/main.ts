@@ -1,12 +1,12 @@
 import './style.css';
 import { Game } from './game';
 import { World } from './sim/world';
-import { randomLook } from './content/looks';
-import { buildStarterHouse } from './content/starter';
+import { addFumblewicks, buildStarterHouse } from './content/starter';
 
 const world = new World();
 buildStarterHouse(world);
-const bartley = world.addMim('Bartley Fumblewick', randomLook(world.rng), 9, 12);
+addFumblewicks(world);
+const bartley = world.mims[0];
 
 const game = new Game(world, document.getElementById('view') as HTMLCanvasElement, document.getElementById('ui')!);
 game.camera.cx = 11;
