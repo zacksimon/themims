@@ -74,7 +74,7 @@ function socialChoices(w: World, m: Mim): Choice[] {
   if (m.needs.social >= 75) return out;
   const mood = moodOf(m.needs);
   for (const t of w.mims) {
-    if (t === m || !w.available(t)) continue;
+    if (t === m || !w.available(t, m)) continue;
     const dist = Math.hypot(t.x - m.x, t.y - m.y);
     const r = w.rel(m.id, t.id);
     // Pick what to do with this Mim by weighted chance (for variety), then score that one option.

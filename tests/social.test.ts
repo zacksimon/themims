@@ -51,6 +51,58 @@ describe('social interactions', () => {
     expect(w.outbox.some((n) => n.text.includes('explains the joke back'))).toBe(true);
   });
 
+  it('a chat with a Mim who is walking somewhere still happens', () => {
+    const { w, a, b } = pair(3);
+    w.rng.next = () => 0.01; // accepted
+    b.needs.hygiene = 20;
+    w.queueInteraction(b, w.objects.find((o) => o.def === 'shower')!, 'shower');
+    w.step(0.25);
+    w.step(0.25);
+    expect(b.path.length).toBeGreaterThan(0);
+    w.queueSocial(a, b, 'chat');
+    let talked = false;
+    for (let t = 0; t < 30; t += 0.25) {
+      w.step(0.25);
+      if (a.queue[0]?.kind === 'social' && a.queue[0].phase === 'use') talked = true;
+    }
+    expect(talked).toBe(true);
+    expect(w.outbox.some((n) => n.text.includes("didn't hear"))).toBe(false);
+  });
+
+  it('a player-queued chat that gives up says so', () => {
+    const { w, a, b } = pair(3);
+    w.queueSocial(a, b, 'chat');
+    // b keeps teleporting away, out of reach of the hail
+    for (let t = 0; t < 20; t += 0.25) {
+      b.x = t % 2 < 1 ? 20.5 : 2.5;
+      b.y = 20.5;
+      b.path = [[Math.floor(b.x), 19]];
+      b.pose = 'walk';
+      w.step(0.25);
+    }
+    expect(a.queue).toHaveLength(0);
+    expect(w.outbox.some((n) => n.text.includes("didn't hear"))).toBe(true);
+  });
+
+  it('gossip is about the Mim the gossiper likes least', () => {
+    const w = new World(24, 11);
+    w.freeWill = false;
+    buildStarterHouse(w);
+    const a = w.addMim('Ada', randomLook(w.rng), 7, 12);
+    const b = w.addMim('Bo', randomLook(w.rng), 8, 12);
+    const c = w.addMim('Cy', randomLook(w.rng), 14, 11);
+    const d = w.addMim('Di', randomLook(w.rng), 14, 12);
+    w.rel(a.id, b.id).daily = 60;
+    w.rel(a.id, d.id).daily = -10; // Ada likes Di least
+    w.rng.next = () => 0.01;
+    const cBefore = w.rel(b.id, c.id).daily;
+    const dBefore = w.rel(b.id, d.id).daily;
+    w.queueSocial(a, b, 'gossip');
+    run(w, 15);
+    expect(w.rel(b.id, d.id).daily).toBeLessThan(dBefore);
+    expect(w.rel(b.id, c.id).daily).toBe(cBefore);
+  });
+
   it('relationship gates what is on offer', () => {
     const { w, a, b } = pair();
     const opts = () => Object.fromEntries(w.socialOptions(a, b).map((o) => [o.def.id, o.ok]));

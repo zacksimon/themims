@@ -45,7 +45,9 @@ export class PieMenu {
       const rows = Math.ceil(n / cols);
       const hgt = Math.min(vh - 120, 48 + rows * 52);
       const left = Math.min(vw - w - 8, Math.max(8, x - w / 2));
-      const top = Math.min(vh - hgt - 8, Math.max(64, y - hgt / 2));
+      // keep the list below the top bar so it doesn't sit over the HUD
+      const barBottom = (document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 56) + 8;
+      const top = Math.min(vh - hgt - 8, Math.max(barBottom, y - hgt / 2));
       const list = h('div', { class: 'pie-list panel', role: 'menu', 'aria-label': title, style: `left:${left}px;top:${top}px;width:${w}px;max-height:${hgt}px;grid-template-columns:repeat(${cols},1fr)` });
       list.append(h('div', { class: 'pie-list-title' }, title));
       for (const o of options) {

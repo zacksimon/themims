@@ -86,13 +86,20 @@ export class World {
     r.daily = Math.max(-100, Math.min(100, r.daily + d));
   }
 
-  /** Can this Mim be approached for a chat right now? */
-  available(t: Mim): boolean {
-    if (t.pose === 'lie') return false;
-    if (t.engaged && t.engaged.until > this.time) return false;
+  /** Can this Mim be approached for a chat right now? Sleeping Mims can't; one already hailed by `by` can. */
+  available(t: Mim, by?: Mim): boolean {
+    if (this.sleeping(t)) return false;
+    if (t.engaged && t.engaged.until > this.time && t.engaged.with !== by?.id) return false;
     const a = t.queue[0];
     if (a?.kind === 'social' && a.phase !== 'pending') return false;
     return true;
+  }
+
+  sleeping(t: Mim): boolean {
+    const a = t.queue[0];
+    if (t.pose !== 'lie' || !a || a.phase !== 'use' || a.kind !== 'interact') return false;
+    const o = this.obj(a.objId!);
+    return !!(o && findIx(o.def, a.ix!)?.sleep);
   }
 
   /** Queue a social interaction with another Mim. */
@@ -470,13 +477,28 @@ export class World {
       case 'walk': {
         if (a.kind === 'social') {
           const t = this.mim(a.targetMim!);
-          if (!t || !this.available(t)) return this.finish(m, a, false);
-          // the target wandered off: re-route a few times, then give up
+          if (!t || !this.available(t, m)) return this.giveUpSocial(m, a);
+          a.waited = (a.waited ?? 0) + dt;
+          // Player-queued: call out when close, so the target stops and turns around.
+          if (!a.auto && Math.hypot(t.x - m.x, t.y - m.y) <= 3 && !(t.engaged && t.engaged.until > this.time)) {
+            t.engaged = { with: m.id, until: this.time + 4 };
+            this.speak(m, '👋', 'question');
+          }
           if (a.route && Math.hypot(t.x - (a.route[0] + 0.5), t.y - (a.route[1] + 0.5)) > 1.6) {
-            a.tries = (a.tries ?? 0) + 1;
-            if (a.tries > 4) return this.finish(m, a, false);
-            a.phase = 'pending';
-            return;
+            if (t.path.length || t.pose === 'walk') {
+              // a moving target: quietly re-path every half minute, for up to 10 minutes
+              if (a.waited > 10) return this.giveUpSocial(m, a);
+              if (a.waited - (a.repathAt ?? 0) >= 0.5) {
+                a.repathAt = a.waited;
+                a.phase = 'pending';
+                return;
+              }
+            } else {
+              a.tries = (a.tries ?? 0) + 1;
+              if (a.tries > 4) return this.giveUpSocial(m, a);
+              a.phase = 'pending';
+              return;
+            }
           }
         }
         if (a.slotObj !== undefined) {
@@ -612,9 +634,19 @@ export class World {
 
   // ---------- social ----------
 
+  /** A social action that couldn't happen: say so when the player asked for it. */
+  private giveUpSocial(m: Mim, a: Action): void {
+    const t = this.mim(a.targetMim!);
+    if (!a.auto && t) {
+      this.notify(`${t.name.split(' ')[0]} didn't hear ${m.name.split(' ')[0]}.`);
+      this.think(m, '😕', 3);
+    }
+    this.finish(m, a, false);
+  }
+
   private beginSocial(m: Mim, a: Action): void {
     const t = this.mim(a.targetMim!);
-    if (!t || !this.available(t)) {
+    if (!t || !this.available(t, m)) {
       this.think(m, '❓');
       if (!a.auto && t) this.notify(`${t.name} is busy right now.`);
       return this.finish(m, a, false);
@@ -652,7 +684,7 @@ export class World {
   private arriveSocial(m: Mim, a: Action): void {
     const t = this.mim(a.targetMim!);
     const def = SOCIAL_BY_ID[a.social!];
-    if (!t || !def || !this.available(t)) return this.finish(m, a, false);
+    if (!t || !def || !this.available(t, m)) return this.giveUpSocial(m, a);
     faceToward(m, t.x, t.y);
     faceToward(t, m.x, m.y);
     const r = this.rel(m.id, t.id);
@@ -688,7 +720,9 @@ export class World {
         const share = Math.min(1, a.t / def.minutes);
         this.changeRel(m.id, t.id, def.good * share);
         if (def.id === 'gossip') {
-          const third = this.mims.find((x) => x !== m && x !== t);
+          // the gossip is about whoever the gossiper likes least
+          const others = this.mims.filter((x) => x !== m && x !== t);
+          const third = others.sort((p, q) => this.rel(m.id, p.id).daily - this.rel(m.id, q.id).daily)[0];
           if (third) this.changeRel(t.id, third.id, -3);
         }
         if (def.mean && !a.auto) this.notify(`${m.name} and ${t.name} are not on speaking terms after that.`, 'bad');

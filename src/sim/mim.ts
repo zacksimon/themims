@@ -37,8 +37,10 @@ export interface Action {
   accepted?: boolean;
   /** Re-route attempts when a social target wanders off. */
   tries?: number;
-  /** Minutes spent waiting for an occupied object. */
+  /** Minutes spent waiting for an occupied object, or chasing a moving social target. */
   waited?: number;
+  /** Social: chase time at the last re-path. */
+  repathAt?: number;
 }
 
 export interface Mim {
