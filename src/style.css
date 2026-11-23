@@ -54,6 +54,7 @@ button:disabled { opacity: 0.45; }
 .toast.good { border-left: 5px solid #1e9e6a; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(-8px); } }
 
+#ui > .tooltip, .tooltip { pointer-events: none !important; }
 .tooltip { position: absolute; padding: 6px 10px; font-size: 13px; max-width: 240px; pointer-events: none; z-index: 30; }
 .tooltip b { display: block; }
 .group:empty { display: none; }
@@ -63,3 +64,40 @@ button:disabled { opacity: 0.45; }
   .walls .lbl { display: none; }
   .group button { padding: 0 6px; min-width: 40px; }
 }
+
+/* Pie menu */
+.pie-root { position: absolute; inset: 0; z-index: 20; pointer-events: auto; }
+.pie-backdrop { position: absolute; inset: 0; background: rgba(20, 16, 40, 0.18); }
+.pie { position: absolute; width: 0; height: 0; }
+.pie-title { position: absolute; transform: translate(-50%, -50%); padding: 6px 12px; font-size: 13px; font-weight: bold; white-space: nowrap; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.pie-item {
+  position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 15px; padding: 0 14px 0 8px; border-radius: 22px;
+  animation: pieIn 0.18s ease-out backwards;
+}
+.pie-item .pie-ic { font-size: 18px; }
+@keyframes pieIn { from { opacity: 0; scale: 0.6; } }
+
+/* Mim panel */
+.mimpanel {
+  position: absolute; left: calc(8px + var(--safe-l)); bottom: calc(8px + var(--safe-b)); width: min(360px, calc(100vw - 84px));
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+}
+.mp-head { display: flex; align-items: center; gap: 8px; }
+.portrait { border-radius: 12px; background: #e9e3f5; flex: none; }
+.mp-name { flex: 1; min-width: 0; }
+.mp-name b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.moodbar, .bar { height: 8px; border-radius: 4px; background: rgba(43, 35, 80, 0.12); overflow: hidden; margin-top: 4px; }
+.moodbar i, .bar i { display: block; height: 100%; border-radius: 4px; transition: width 0.3s; }
+.collapse { box-shadow: none; background: transparent; font-size: 18px; }
+.queue { display: flex; gap: 4px; min-height: 44px; align-items: center; flex-wrap: wrap; }
+.qitem { font-size: 20px; padding: 0; width: 44px; background: #fff; border: 2px solid transparent; }
+.qitem.current { border-color: var(--accent); }
+.qitem.auto { opacity: 0.75; border-style: dashed; }
+.qitem.cancelling { opacity: 0.35; }
+.idle { color: var(--muted); font-size: 13px; padding-left: 4px; }
+.needs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; }
+.need { display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; align-items: center; font-size: 12px; }
+.need-ic { grid-row: span 2; font-size: 15px; }
+.need .bar { margin-top: 2px; }
+.fw { font-size: 13px; display: flex; align-items: center; gap: 6px; min-height: 32px; }
+.fw input { width: 20px; height: 20px; }

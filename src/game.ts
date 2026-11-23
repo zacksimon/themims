@@ -6,9 +6,15 @@ import { Camera } from './world/camera';
 import { Drawable, Renderer, SceneSource, WallMode } from './world/render/renderer';
 import { Hud } from './ui/hud';
 import { View, depthOf, screenToTile, worldToScreen } from './world/iso';
-import { drawMim, drawSelection } from './world/render/mimDraw';
+import { drawBubble, drawMim, drawSelection } from './world/render/mimDraw';
 import { tilePoly, poly } from './world/render/draw';
 import type { Mim } from './sim/mim';
+import { Painter } from './world/render/painter';
+import { ObjInst, defOf, worldSize } from './sim/objects';
+import { moodOf } from './sim/needs';
+import { PieMenu, PieOption } from './ui/pieMenu';
+import { MimPanel } from './ui/mimPanel';
+import { h } from './ui/dom';
 
 /** Wires simulation, rendering, input and UI together. */
 export class Game implements SceneSource {
@@ -22,6 +28,10 @@ export class Game implements SceneSource {
   /** Brief marker where the player sent a Mim. */
   private marker: { x: number; y: number; until: number; ok: boolean } | null = null;
   private now = 0;
+  readonly pie: PieMenu;
+  readonly panel: MimPanel;
+  private tooltip = h('div', { class: 'tooltip panel', style: 'display:none' });
+  private tooltipUntil = 0;
   private keys = new Set<string>();
   private lastFrame = 0;
   private wheelAcc = 0;
@@ -36,6 +46,9 @@ export class Game implements SceneSource {
     this.loop = new Loop((dt) => this.world.step(dt), (now) => this.render(now));
     this.hud = new Hud(this);
     this.uiRoot.append(this.hud.root);
+    this.panel = new MimPanel(this);
+    this.uiRoot.append(this.panel.root, this.tooltip);
+    this.pie = new PieMenu(this.uiRoot);
     this.gestures = new GestureRecognizer((g) => this.onGesture(g));
     this.bindInput(canvas);
     window.addEventListener('resize', () => this.renderer.resize(this.camera));
@@ -67,10 +80,24 @@ export class Game implements SceneSource {
   }
 
   drawables(v: View): Drawable[] {
-    return this.world.mims.map((m) => ({
-      depth: depthOf(v, m.x, m.y) + 0.01,
-      draw: (ctx: CanvasRenderingContext2D) => drawMim(ctx, v, m),
-    }));
+    const out: Drawable[] = [];
+    for (const o of this.world.objects) {
+      const p = new Painter(v, defOf(o), o.x, o.y, o.dir);
+      defOf(o).draw(p, o, this.now);
+      out.push(...p.out);
+    }
+    for (const m of this.world.mims) {
+      const a = m.queue[0];
+      const act = a?.phase === 'use' && a.kind === 'interact' ? a.ix : undefined;
+      // A lying Mim sorts by whichever end of its body is closest to the camera, so the mattress never covers it.
+      const depth = m.lie ? Math.max(depthOf(v, m.lie[0], m.lie[1]), depthOf(v, m.lie[2], m.lie[3])) + 0.01 : depthOf(v, m.x, m.y) + 0.01;
+      out.push({
+        depth,
+        draw: (ctx: CanvasRenderingContext2D) =>
+          drawMim(ctx, v, { ...m, mood: moodOf(m.needs) / 100, act, t: this.now }),
+      });
+    }
+    return out;
   }
 
   groundOverlay(ctx: CanvasRenderingContext2D, v: View): void {
@@ -82,8 +109,91 @@ export class Game implements SceneSource {
   }
 
   overlay(ctx: CanvasRenderingContext2D, v: View): void {
+    const sel = this.selected;
+    if (sel) drawSelection(ctx, v, sel.x, sel.y, this.now, sel.pose === 'lie' ? 1.3 : sel.pose === 'sit' ? 2.0 : 2.1);
+    for (const m of this.world.mims) {
+      if (!m.thought) continue;
+      const head = m.pose === 'lie' ? 1.1 : m.pose === 'sit' ? 1.8 : 2.0;
+      drawBubble(ctx, v, m.x, m.y, head + m.z + (m === sel ? 0.7 : 0), m.thought.icon);
+    }
+  }
+
+  /** Screen-space silhouette of an object (its footprint box extruded to its height). */
+  private objHull(o: ObjInst): [number, number][] {
+    const [w, hgt] = worldSize(defOf(o), o.dir);
+    const pts: [number, number][] = [];
+    for (const [x, y] of [[o.x, o.y], [o.x + w, o.y], [o.x + w, o.y + hgt], [o.x, o.y + hgt]])
+      for (const z of [0, defOf(o).height]) pts.push(worldToScreen(this.camera, x, y, z));
+    return convexHull(pts);
+  }
+
+  /** Front-most object whose silhouette contains the screen point. */
+  objAt(sx: number, sy: number): ObjInst | undefined {
+    let best: ObjInst | undefined;
+    let bd = -Infinity;
+    for (const o of this.world.objects) {
+      if (!pointInPoly(sx, sy, this.objHull(o))) continue;
+      const [w, hh] = worldSize(defOf(o), o.dir);
+      const d = depthOf(this.camera, o.x + w / 2, o.y + hh / 2);
+      if (d > bd) {
+        bd = d;
+        best = o;
+      }
+    }
+    return best;
+  }
+
+  /** Pie menu of interactions for the selected Mim on an object. */
+  openObjectMenu(o: ObjInst, sx: number, sy: number): void {
     const m = this.selected;
-    if (m) drawSelection(ctx, v, m.x, m.y, this.now);
+    const def = defOf(o);
+    if (!m) {
+      this.showTooltip(sx, sy, def.name, def.desc);
+      return;
+    }
+    const opts: PieOption[] = def.interactions
+      .filter((ix) => !ix.hidden && (!ix.available || ix.available(this.world, m, o)))
+      .map((ix) => ({
+        label: ix.label,
+        icon: ix.icon,
+        disabled: !!ix.cost && this.world.funds < ix.cost,
+        onSelect: () => {
+          if (!this.world.queueInteraction(m, o, ix.id)) this.hud.toast(`${m.name}'s to-do list is full.`, 'bad', 2500);
+        },
+      }));
+    if (!opts.length) {
+      this.showTooltip(sx, sy, def.name, def.desc);
+      return;
+    }
+    this.hideTooltip();
+    this.pie.show(sx, sy, def.name, opts);
+  }
+
+  showTooltip(sx: number, sy: number, title: string, body: string, ms = 2600): void {
+    this.tooltip.replaceChildren(h('b', {}, title), body);
+    this.tooltip.style.display = '';
+    const w = 240;
+    this.tooltip.style.left = `${Math.min(window.innerWidth - w - 8, Math.max(8, sx - w / 2))}px`;
+    this.tooltip.style.top = `${Math.max(60, sy - 90)}px`;
+    this.tooltipUntil = performance.now() + ms;
+  }
+
+  hideTooltip(): void {
+    this.tooltip.style.display = 'none';
+    this.tooltipUntil = 0;
+  }
+
+  private hover(sx: number, sy: number): void {
+    if (this.pie.open) return;
+    const o = this.objAt(sx, sy);
+    const m = this.mimAt(sx, sy);
+    if (m) {
+      const a = m.queue[0];
+      this.showTooltip(sx, sy, m.name, a ? `Busy: ${a.label}` : 'Idle', 1200);
+    } else if (o) {
+      const d = defOf(o);
+      this.showTooltip(sx, sy, d.name, `₥${d.price} · ${d.desc}`, 1200);
+    } else if (performance.now() < this.tooltipUntil) this.tooltipUntil = 0;
   }
 
   /** Screen position of a world point (used by tests and UI anchoring). */
@@ -110,24 +220,44 @@ export class Game implements SceneSource {
     return best;
   }
 
-  /** Live-mode tap: select a Mim, or send the selected Mim to a tile. */
+  /** Live-mode tap: select a Mim, open an object's pie menu, or send the selected Mim to a tile. */
   tap(sx: number, sy: number): void {
     const hit = this.mimAt(sx, sy);
     if (hit) {
       this.select(hit.id);
       return;
     }
+    const o = this.objAt(sx, sy);
+    if (o) {
+      this.openObjectMenu(o, sx, sy);
+      return;
+    }
     const m = this.selected;
     if (!m) return;
     const [tx, ty] = screenToTile(this.camera, sx, sy);
-    const ok = this.world.walkTo(m, [tx, ty]);
+    const ok = !!this.world.queueGoto(m, [tx, ty]);
     this.marker = { x: tx, y: ty, until: this.now + 700, ok };
-    if (!ok) this.hud.toast(`${m.name} can't get there. They checked twice.`, 'bad', 2500);
+  }
+
+  private longPress(sx: number, sy: number): void {
+    const m = this.mimAt(sx, sy);
+    if (m) {
+      const a = m.queue[0];
+      this.showTooltip(sx, sy, m.name, a ? `Busy: ${a.label}` : 'Idle');
+      return;
+    }
+    const o = this.objAt(sx, sy);
+    if (o) {
+      const d = defOf(o);
+      const uses = d.interactions.filter((i) => !i.hidden).map((i) => i.label).join(', ');
+      this.showTooltip(sx, sy, d.name, `₥${d.price} · ${d.desc}${uses ? ` Uses: ${uses}.` : ''}`);
+    }
   }
 
   private render(now: number): void {
     this.now = now;
     for (const t of this.world.outbox.splice(0)) this.hud.toast(t.text, t.kind);
+    if (this.tooltip.style.display !== 'none' && now > this.tooltipUntil) this.tooltip.style.display = 'none';
     this.gestures.tick(now);
     const dt = this.lastFrame ? Math.min(100, now - this.lastFrame) : 16.7;
     this.lastFrame = now;
@@ -135,6 +265,7 @@ export class Game implements SceneSource {
     const fade = this.camera.update(now);
     this.renderer.frame(this.camera, this, fade);
     this.hud.update();
+    this.panel.update();
   }
 
   /** Keyboard panning, scaled by frame time so it moves at the same speed on 60 Hz and 120 Hz displays. */
@@ -165,6 +296,12 @@ export class Game implements SceneSource {
         break;
       case 'tap':
         this.tap(g.x, g.y);
+        break;
+      case 'longpress':
+        this.longPress(g.x, g.y);
+        break;
+      case 'hover':
+        this.hover(g.x, g.y);
         break;
       case 'twist':
         this.camera.rotate(g.dir);
@@ -239,4 +376,30 @@ export class Game implements SceneSource {
   }
 
   protected onKey(_k: string, _e: KeyboardEvent): void {}
+}
+
+function convexHull(pts: [number, number][]): [number, number][] {
+  const p = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const q of p) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], q) <= 0) lower.pop();
+    lower.push(q);
+  }
+  const upper: [number, number][] = [];
+  for (let i = p.length - 1; i >= 0; i--) {
+    const q = p[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], q) <= 0) upper.pop();
+    upper.push(q);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+function pointInPoly(x: number, y: number, poly: [number, number][]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
 }
