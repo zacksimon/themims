@@ -109,14 +109,16 @@ button:disabled { opacity: 0.45; }
 /* Build / buy bottom sheet */
 .sheet {
   position: absolute; left: calc(8px + var(--safe-l)); right: calc(68px + var(--safe-r)); bottom: calc(8px + var(--safe-b));
-  max-width: 900px; padding: 8px; display: flex; flex-direction: column; gap: 6px;
+  max-width: 900px; padding: 8px; display: flex; flex-direction: row; gap: 6px; align-items: stretch;
 }
+.sheet-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.sheet > .undo { flex: none; flex-direction: column; gap: 0; min-width: 56px; box-shadow: none; background: rgba(43, 35, 80, 0.06); }
+.sheet > .undo .ti { font-size: 22px; line-height: 1.1; }
+.sheet > .undo .lbl2 { display: inline; font-size: 11px; }
 .sheet-row { display: flex; gap: 6px; align-items: center; overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
 .sheet-row::-webkit-scrollbar { height: 6px; }
 .sheet-row > button { flex: none; box-shadow: none; background: rgba(43, 35, 80, 0.06); }
 .sheet-row > button.on { background: var(--ink); color: #fff; }
-.tabs .undo { margin-left: auto; }
-.tools .undo { margin-left: auto; }
 .tools button { flex-direction: column; gap: 0; padding: 4px 10px; min-width: 56px; }
 .tools .ti { font-size: 20px; line-height: 1.1; }
 .tools .lbl2 { font-size: 11px; }

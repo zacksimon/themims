@@ -93,12 +93,16 @@ export class BuildController {
     }
     s.style.display = '';
     clear(s);
-    const undo = h('button', { class: 'undo', title: 'Undo (Ctrl+Z)', disabled: !this.builder.canUndo, onclick: () => this.undo() }, '↶', h('span', { class: 'lbl2' }, 'Undo'));
+    // Undo is pinned outside the scrolling rows so it is always visible on phones.
+    const undo = h('button', { class: 'undo', title: 'Undo (Ctrl+Z)', 'aria-label': 'Undo', disabled: !this.builder.canUndo, onclick: () => this.undo() }, h('span', { class: 'ti' }, '↶'), h('span', { class: 'lbl2' }, 'Undo'));
+    const main = h('div', { class: 'sheet-main' });
+    s.append(main, undo);
     if (this.mode === 'buy') {
       if (this.placing) {
         const d = OBJECTS[this.placing.def];
         const touch = matchMedia('(pointer: coarse)').matches;
-        s.append(
+        undo.remove();
+        main.append(
           h('div', { class: 'sheet-row placing' },
             h('img', { src: thumbnail(this.placing.def, 48), alt: '' }),
             h('div', { class: 'grow' }, h('b', {}, d.name), h('small', {}, this.placing.moving ? 'Moving' : `₥${d.price}`), h('small', { class: 'hint' }, touch ? 'Tap a spot or drag to adjust.' : 'Click to place. , and . rotate. Esc cancels.')),
@@ -111,7 +115,6 @@ export class BuildController {
       }
       const tabs = h('div', { class: 'sheet-row tabs', role: 'tablist' });
       for (const c of CATS) tabs.append(h('button', { class: this.cat === c.id ? 'on' : '', role: 'tab', onclick: () => { this.cat = c.id; this.render(); } }, c.label));
-      tabs.append(undo);
       const items = h('div', { class: 'sheet-row items' });
       for (const id of CATALOG_ORDER) {
         const d = OBJECTS[id];
@@ -125,27 +128,26 @@ export class BuildController {
           ),
         );
       }
-      s.append(tabs, items);
+      main.append(tabs, items);
       return;
     }
     const tools = h('div', { class: 'sheet-row tools' });
     for (const t of TOOLS) {
       tools.append(h('button', { class: this.tool === t.id ? 'on' : '', 'data-tool': t.id, title: t.hint, onclick: () => { this.tool = this.tool === t.id ? null : t.id; this.render(); } }, h('span', { class: 'ti' }, t.icon), h('span', { class: 'lbl2' }, t.label)));
     }
-    tools.append(undo);
-    s.append(tools);
+    main.append(tools);
     const tdef = TOOLS.find((t) => t.id === this.tool);
     if (this.tool === 'wall' || this.tool === 'paint') {
       const row = h('div', { class: 'sheet-row swatches' });
       WALLS.forEach((st, i) => row.append(h('button', { class: `sw${i === this.wallStyle ? ' on' : ''}`, title: `${st.name} · ₥${st.price} per segment`, onclick: () => { this.wallStyle = i; this.render(); } }, h('i', { style: `background:${st.color};border-color:${st.trim}` }), h('span', {}, `₥${st.price}`))));
-      s.append(row);
+      main.append(row);
     } else if (this.tool === 'floor') {
       const row = h('div', { class: 'sheet-row swatches' });
       FLOORS.forEach((st, i) => row.append(h('button', { class: `sw${i === this.floorStyle ? ' on' : ''}`, title: `${st.name} · ₥${st.price} per tile`, onclick: () => { this.floorStyle = i; this.render(); } }, h('i', { style: `background:${st.pattern === 'checker' ? `repeating-conic-gradient(${st.a} 0 25%, ${st.b} 0 50%) 0 0/12px 12px` : st.a}` }), h('span', {}, `₥${st.price}`))));
-      s.append(row);
+      main.append(row);
     } else if (this.tool === 'door' || this.tool === 'window') {
-      s.append(h('div', { class: 'sheet-row hintrow' }, `${tdef!.hint} ₥${this.tool === 'door' ? DOOR_PRICE : WINDOW_PRICE} each.`));
-    } else s.append(h('div', { class: 'sheet-row hintrow' }, tdef ? tdef.hint : 'Pick a tool. With no tool, dragging pans the camera.'));
+      main.append(h('div', { class: 'sheet-row hintrow' }, `${tdef!.hint} ₥${this.tool === 'door' ? DOOR_PRICE : WINDOW_PRICE} each.`));
+    } else main.append(h('div', { class: 'sheet-row hintrow' }, tdef ? tdef.hint : 'Pick a tool. With no tool, dragging pans the camera.'));
   }
 
   // ---------- operations ----------

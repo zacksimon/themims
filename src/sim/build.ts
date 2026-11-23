@@ -14,7 +14,8 @@ interface Snapshot {
   walls: [string, Wall][];
   floors: number[];
   objects: ObjInst[];
-  funds: number;
+  /** What the step cost (negative for refunds), so undo hands back exactly that amount. */
+  cost: number;
 }
 
 /** Build/buy operations with costs, validation and an undo stack. */
@@ -27,13 +28,18 @@ export class Builder {
     return this.undoStack.length > 0;
   }
 
+  /** Called when leaving build/buy: undo only covers the current (paused) build session. */
+  clearUndo(): void {
+    this.undoStack = [];
+  }
+
   private snapshot(): Snapshot {
     const w = this.w;
     return {
       walls: [...w.lot.walls.entries()].map(([k, v]) => [k, { ...v }]),
       floors: w.lot.floors.slice(),
       objects: w.objects.map((o) => ({ ...o, reserved: o.reserved.slice(), state: { ...o.state } })),
-      funds: w.funds,
+      cost: 0,
     };
   }
 
@@ -46,45 +52,54 @@ export class Builder {
     const s = this.undoStack.pop();
     if (!s) return false;
     const w = this.w;
-    w.lot.walls = new Map(s.walls);
-    w.lot.floors = s.floors;
-    w.lot.version++;
-    w.objects = s.objects;
-    w.funds = s.funds;
+    this.restore(s);
+    w.funds += s.cost;
     w.revalidateActions();
     w.structureChanged();
     return true;
   }
 
-  /** Run a change; if `check` fails afterwards, roll it back. Records undo on success. */
-  private attempt(change: () => BuildResult, cost: number): BuildResult {
+  /**
+   * Run a change tentatively. The trap check only looks at walls and occupancy; Mims are not touched until the
+   * change is accepted, so a refused change leaves everyone exactly as they were. `accepted` runs after success.
+   */
+  private attempt(change: () => BuildResult, cost: number, accepted?: () => void): BuildResult {
     const w = this.w;
     if (cost > w.funds) return `That costs ₥${cost.toLocaleString('en-US')}. You have ₥${Math.floor(w.funds).toLocaleString('en-US')}.`;
     const before = this.snapshot();
     const err = change();
-    if (!err) {
-      w.structureChanged();
-      const trapped = this.trappedMim();
-      if (!trapped) {
-        w.funds -= cost;
-        this.push(before);
-        return null;
-      }
+    if (err) {
+      this.restore(before);
+      return err;
+    }
+    w.objVersion++; // refresh the occupancy cache for the check below
+    const trapped = this.trappedMim();
+    if (trapped) {
       this.restore(before);
       return `That would trap ${trapped} with no way out.`;
     }
-    this.restore(before);
-    return err;
+    w.funds -= cost;
+    before.cost = cost;
+    this.push(before);
+    accepted?.();
+    w.structureChanged();
+    return null;
   }
 
+  /** Put walls, floors and objects back. Objects are updated in place so references held elsewhere stay valid. */
   private restore(s: Snapshot): void {
     const w = this.w;
     w.lot.walls = new Map(s.walls);
-    w.lot.floors = s.floors;
+    w.lot.floors = s.floors.slice();
     w.lot.version++;
-    w.objects = s.objects;
-    w.funds = s.funds;
-    w.structureChanged();
+    const live = new Map(w.objects.map((o) => [o.id, o]));
+    w.objects = s.objects.map((saved) => {
+      const cur = live.get(saved.id);
+      if (!cur) return { ...saved, reserved: saved.reserved.slice(), state: { ...saved.state } };
+      Object.assign(cur, saved, { reserved: saved.reserved.slice(), state: { ...saved.state } });
+      return cur;
+    });
+    w.objVersion++;
   }
 
   /** Name of a Mim who can no longer reach the street, if any. */
@@ -134,14 +149,17 @@ export class Builder {
   move(o: ObjInst, x: number, y: number, dir: Dir): BuildResult {
     const err = this.placementError(o.def, x, y, dir, o.id);
     if (err) return err;
-    this.w.abortActionsFor(o.id);
-    return this.attempt(() => {
-      const cur = this.w.obj(o.id)!;
-      cur.x = x;
-      cur.y = y;
-      cur.dir = dir;
-      return null;
-    }, 0);
+    return this.attempt(
+      () => {
+        const cur = this.w.obj(o.id)!;
+        cur.x = x;
+        cur.y = y;
+        cur.dir = dir;
+        return null;
+      },
+      0,
+      () => this.w.abortActionsFor(o.id),
+    );
   }
 
   /** Refund: full value within the first game hour, then 80% dropping 5% a day to a floor of 40%. */
@@ -155,11 +173,14 @@ export class Builder {
   sell(o: ObjInst): BuildResult {
     const w = this.w;
     const refund = this.refundFor(o);
-    w.abortActionsFor(o.id);
-    return this.attempt(() => {
-      w.objects = w.objects.filter((x) => x.id !== o.id);
-      return null;
-    }, -refund);
+    return this.attempt(
+      () => {
+        w.objects = w.objects.filter((x) => x.id !== o.id);
+        return null;
+      },
+      -refund,
+      () => w.abortActionsFor(o.id),
+    );
   }
 
   // ---------- walls ----------

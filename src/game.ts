@@ -102,6 +102,7 @@ export class Game implements SceneSource {
     }
     this.build.setMode(m);
     if (m === 'live') {
+      this.build.builder.clearUndo();
       this.setSpeed(this.liveSpeed);
       for (const mm of this.world.mims) {
         const before = this.roomBefore.get(mm.id);

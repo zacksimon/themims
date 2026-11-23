@@ -159,3 +159,63 @@ describe('builder: buy mode', () => {
     expect(w.roomScoreAt(15, 7)).toBeGreaterThan(before + 10);
   });
 });
+
+describe('builder: review regressions', () => {
+  it('undo gives back the cost of the step, not an old absolute balance', () => {
+    const { w, b } = setup();
+    b.buy('fern', 4, 4, 0);
+    w.funds += 5000; // e.g. a paycheck arrived
+    expect(b.undo()).toBe(true);
+    expect(w.funds).toBe(25000);
+  });
+
+  it('clearUndo empties the stack', () => {
+    const { b } = setup();
+    b.buy('fern', 4, 4, 0);
+    b.clearUndo();
+    expect(b.canUndo).toBe(false);
+    expect(b.undo()).toBe(false);
+  });
+
+  it("a refused (trapping) wall leaves a walking Mim's action and path alone", () => {
+    const w = new World(24, 3);
+    w.freeWill = false;
+    buildStarterHouse(w);
+    const b = new Builder(w);
+    const m = w.addMim('Gus', randomLook(w.rng), 20, 20);
+    w.queueInteraction(m, w.objects.find((o) => o.def === 'fridge_basic')!, 'snack');
+    w.step(0.25);
+    w.step(0.25);
+    expect(m.queue).toHaveLength(1);
+    const pathLen = m.path.length;
+    expect(pathLen).toBeGreaterThan(0);
+    // box Gus in on the lawn
+    const walls = [...edgeRun(19, 19, 22, 19).keys, ...edgeRun(19, 22, 22, 22).keys, ...edgeRun(19, 19, 19, 22).keys, ...edgeRun(22, 19, 22, 22).keys];
+    expect(b.buildWalls(walls, 0)).toMatch(/trap Gus/);
+    expect(m.queue).toHaveLength(1);
+    expect(m.path.length).toBe(pathLen);
+    expect(w.lot.walls.has('h:20:19')).toBe(false);
+  });
+
+  it('a move refused by the trap check does not stand up a Mim sitting on the object', () => {
+    const w = new World(16, 3);
+    w.freeWill = false;
+    const b = new Builder(w);
+    // a 3x1 closet with a door at its left end; Bea stands at the far end
+    w.lot.addRoom(2, 2, 5, 3, 0);
+    w.lot.setWall('h:2:3', { kind: 'door', style: 0 });
+    const bea = w.addMim('Bea', randomLook(w.rng), 4, 2);
+    const chair = w.addObject('chair_dining', 8, 8, 0);
+    const pim = w.addMim('Pim', randomLook(w.rng), 8, 10);
+    pim.needs.comfort = 10;
+    w.queueInteraction(pim, chair, 'sit');
+    for (let t = 0; t < 5; t += 0.25) w.step(0.25);
+    expect(pim.pose).toBe('sit');
+    // moving the chair into the middle of the closet would trap Bea
+    expect(b.move(chair, 3, 2, 0)).toMatch(/trap Bea/);
+    expect(pim.pose).toBe('sit');
+    expect(pim.queue).toHaveLength(1);
+    expect([chair.x, chair.y]).toEqual([8, 8]);
+    void bea;
+  });
+});

@@ -182,6 +182,12 @@ export async function buildBuy(page, { name, out, touch }) {
   if (after.walls !== st.walls || after.funds !== st.funds) throw new Error(`undo failed: ${JSON.stringify([st, after])}`);
 
   // ---- Back to live: time resumes ----
+  // Undo must be visible (not scrolled away) on every screen size
+  const undoBox = await page.locator('.sheet > .undo').boundingBox();
+  const vp = page.viewportSize();
+  if (!undoBox || undoBox.x + undoBox.width > vp.width || undoBox.x < 0) throw new Error('undo button is off-screen');
+  await shot('9-build-undo-pinned');
   await page.click('[data-mode="live"]');
   if ((await state()).speed === 0) throw new Error('live mode should resume time');
+  if (await page.evaluate(() => window.game.build.builder.canUndo)) throw new Error('undo history should clear when returning to live');
 }
