@@ -1,6 +1,7 @@
 import './style.css';
 import { Game } from './game';
 import { World } from './sim/world';
+import { randomLook } from './content/looks';
 
 const world = new World();
 // M0 demo structure so rotation and cutaway are visible
@@ -11,6 +12,9 @@ world.lot.setWall('h:9:12', { kind: 'door', style: 0 });
 world.lot.setWall('h:11:6', { kind: 'window', style: 0 });
 world.lot.setWall('v:6:8', { kind: 'window', style: 0 });
 
+const bartley = world.addMim('Bartley Fumblewick', randomLook(world.rng), 9, 9);
+
 const game = new Game(world, document.getElementById('view') as HTMLCanvasElement, document.getElementById('ui')!);
+game.select(bartley.id);
 game.start();
 (window as unknown as { game: Game }).game = game;

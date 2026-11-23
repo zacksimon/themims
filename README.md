@@ -16,8 +16,10 @@ npm run e2e        # browser smoke test on phone + desktop (after build), screen
 
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |
+| Select a Mim | Tap the Mim | Click the Mim |
+| Walk somewhere | Tap a tile | Click a tile |
 | Pan | One-finger drag | Drag, WASD or arrows |
-| Zoom | Pinch | Wheel, `+`/`-` |
+| Zoom | Pinch | Wheel or trackpad pinch, `+`/`-` |
 | Rotate camera | Two-finger twist or ⟲ ⟳ buttons | `Q`/`E` |
 | Speed | Speed buttons | `1`-`3`, space to pause |
 
