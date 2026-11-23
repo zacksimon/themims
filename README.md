@@ -17,6 +17,9 @@ npm run e2e        # browser smoke test on phone + desktop (after build), screen
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |
 | Select a Mim | Tap the Mim | Click the Mim |
+| Use an object | Tap it, then pick from the pie menu | Click it, then pick |
+| Object or Mim info | Long-press | Hover |
+| Cancel an action | Tap its icon in the queue | Click its icon |
 | Walk somewhere | Tap a tile | Click a tile |
 | Pan | One-finger drag | Drag, WASD or arrows |
 | Zoom | Pinch | Wheel or trackpad pinch, `+`/`-` |

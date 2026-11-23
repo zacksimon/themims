@@ -1,9 +1,35 @@
 import { Look } from '../content/looks';
 import { Tile } from '../world/pathfinding';
+import { Needs, fullNeeds } from './needs';
 
 export type Pose = 'stand' | 'walk' | 'sit' | 'lie';
 
 export const WALK_SPEED = 2.4; // tiles per game minute
+export const MAX_QUEUE = 6;
+
+export interface Action {
+  uid: number;
+  kind: 'interact' | 'goto' | 'eat';
+  objId?: number;
+  ix?: string;
+  tile?: Tile;
+  /** Chosen by free will (true) or queued by the player (false). */
+  auto: boolean;
+  phase: 'pending' | 'walk' | 'use' | 'exit';
+  /** The slot actually used, which may belong to a seat rather than the target. */
+  slotObj?: number;
+  slot?: number;
+  route?: Tile;
+  /** Minutes spent in the use phase. */
+  t: number;
+  cancel?: boolean;
+  label: string;
+  icon: string;
+  /** Inserted as a follow-up step of the previous action (keeps carried items). */
+  chained?: boolean;
+  /** For eating: hunger restored over the meal. */
+  food?: number;
+}
 
 export interface Mim {
   id: number;
@@ -12,18 +38,32 @@ export interface Mim {
   /** Feet position in world coordinates. */
   x: number;
   y: number;
+  z: number;
   /** Facing as a world-space unit vector. */
   fx: number;
   fy: number;
   pose: Pose;
+  /** World head/feet points while lying down. */
+  lie?: [number, number, number, number];
   /** Remaining waypoints (tile centers), consumed as the Mim walks. */
   path: Tile[];
   /** Walk animation phase. */
   anim: number;
+  needs: Needs;
+  queue: Action[];
+  carry?: string;
+  thought?: { icon: string; until: number };
+  /** Minutes until free will next looks for something to do. */
+  fwTimer: number;
+  /** Object ids this Mim recently failed to reach, with the time to retry. */
+  unreachable: Record<number, number>;
 }
 
 export function createMim(id: number, name: string, look: Look, tx: number, ty: number): Mim {
-  return { id, name, look, x: tx + 0.5, y: ty + 0.5, fx: 0, fy: 1, pose: 'stand', path: [], anim: 0 };
+  return {
+    id, name, look, x: tx + 0.5, y: ty + 0.5, z: 0, fx: 0, fy: 1, pose: 'stand', path: [], anim: 0,
+    needs: fullNeeds(), queue: [], fwTimer: 1, unreachable: {},
+  };
 }
 
 export function mimTile(m: Mim): Tile {
@@ -55,8 +95,10 @@ export function stepWalk(m: Mim, dtMin: number): boolean {
       budget = 0;
     }
   }
-  m.anim += dtMin * WALK_SPEED * 2.2;
-  m.pose = m.path.length ? 'walk' : m.pose === 'walk' ? 'stand' : m.pose;
+  if (m.path.length) {
+    m.anim += dtMin * WALK_SPEED * 2.2;
+    m.pose = 'walk';
+  } else if (m.pose === 'walk') m.pose = 'stand';
   return m.path.length === 0;
 }
 

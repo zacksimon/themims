@@ -15,6 +15,13 @@ export interface MimDrawState {
   look: Look;
   /** Optional facial expression: -1 frown, 0 neutral, 1 smile. */
   mood?: number;
+  /** World head/feet points when lying. */
+  lie?: [number, number, number, number];
+  carry?: string;
+  /** Current activity for small animations ('dance'). */
+  act?: string;
+  /** Animation clock in ms. */
+  t?: number;
 }
 
 /** Convert a world facing vector into a screen direction for the current camera rotation. */
@@ -48,15 +55,18 @@ export function drawMim(ctx: CanvasRenderingContext2D, v: View, m: MimDrawState)
   ctx.fill();
 
   if (m.pose === 'lie') {
-    drawLying(ctx, px, py, s, L, side || 1);
+    if (m.lie) drawLyingAlong(ctx, v, m, s);
+    else drawLying(ctx, px, py, s, L, side || 1);
     ctx.restore();
     return;
   }
   ctx.translate(px, py);
   ctx.scale(s, s);
   const walking = m.pose === 'walk';
-  const swing = walking ? Math.sin(m.anim * Math.PI) : 0;
-  const bob = walking ? Math.abs(Math.cos(m.anim * Math.PI)) * 1.5 : 0;
+  const dancing = m.act === 'dance';
+  const dt = (m.t ?? 0) / 180;
+  const swing = walking ? Math.sin(m.anim * Math.PI) : dancing ? Math.sin(dt) : 0;
+  const bob = walking ? Math.abs(Math.cos(m.anim * Math.PI)) * 1.5 : dancing ? Math.abs(Math.sin(dt)) * 5 : 0;
   const sitting = m.pose === 'sit';
   const legH = sitting ? 7 : 14;
   ctx.translate(0, -bob);
@@ -76,7 +86,7 @@ export function drawMim(ctx: CanvasRenderingContext2D, v: View, m: MimDrawState)
   }
   // body
   const bodyTop = -legH - 18;
-  const armSwing = walking ? swing * 3 : 0;
+  const armSwing = walking ? swing * 3 : dancing ? -8 + Math.sin(dt * 2) * 4 : 0;
   // back arm
   roundRect(ctx, side >= 0 ? -12 : 7, bodyTop + 2 - armSwing, 5, 14, 2.5, shade(L.shirt, 0.75));
   roundRect(ctx, -9, bodyTop, 18, 19, 6, L.shirt);
@@ -86,6 +96,7 @@ export function drawMim(ctx: CanvasRenderingContext2D, v: View, m: MimDrawState)
   ctx.beginPath();
   ctx.arc(side >= 0 ? 9.5 : -9.5, bodyTop + 17 + armSwing, 2.6, 0, Math.PI * 2);
   ctx.fill();
+  if (m.carry) drawCarry(ctx, m.carry, side >= 0 ? 9.5 : -9.5, bodyTop + 16 + armSwing);
 
   // head
   const hy = bodyTop - 9;
@@ -213,5 +224,136 @@ export function drawSelection(ctx: CanvasRenderingContext2D, v: View, x: number,
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawCarry(ctx: CanvasRenderingContext2D, item: string, x: number, y: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  switch (item) {
+    case 'plate':
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(0, -2, 7, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#d9843a';
+      ctx.beginPath();
+      ctx.ellipse(0, -3.5, 4, 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case 'pan':
+      ctx.fillStyle = '#2f2f3a';
+      ctx.beginPath();
+      ctx.ellipse(2, -2, 6, 2.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillRect(-7, -3, 6, 1.6);
+      break;
+    case 'groceries':
+      ctx.fillStyle = '#b07a4a';
+      ctx.fillRect(-4, -9, 9, 10);
+      ctx.fillStyle = '#7bc950';
+      ctx.fillRect(-2, -12, 3, 4);
+      break;
+    case 'book':
+      ctx.fillStyle = '#4f7fd9';
+      ctx.fillRect(-4, -8, 8, 9);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-3, -7, 1, 7);
+      break;
+    case 'snack':
+      ctx.fillStyle = '#f2c14e';
+      ctx.beginPath();
+      ctx.arc(0, -3, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    default:
+      break;
+  }
+  ctx.restore();
+}
+
+/** Lying along a bed: a capsule body from the feet to the head, in world space so it follows the bed's facing. */
+function drawLyingAlong(ctx: CanvasRenderingContext2D, v: View, m: MimDrawState, s: number) {
+  const [hx, hy, fx, fy] = m.lie!;
+  const z = m.z ?? 0;
+  const H = worldToScreen(v, hx, hy, z + 0.12);
+  const F = worldToScreen(v, fx, fy, z + 0.12);
+  const lerp = (t: number): [number, number] => [F[0] + (H[0] - F[0]) * t, F[1] + (H[1] - F[1]) * t];
+  const L = m.look;
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 10 * s;
+  ctx.strokeStyle = L.pants;
+  const a = lerp(0.05), b = lerp(0.5), c = lerp(0.78);
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.stroke();
+  ctx.lineWidth = 13 * s;
+  ctx.strokeStyle = L.shirt;
+  ctx.beginPath();
+  ctx.moveTo(b[0], b[1]);
+  ctx.lineTo(c[0], c[1]);
+  ctx.stroke();
+  ctx.fillStyle = L.skin;
+  ctx.beginPath();
+  ctx.arc(H[0], H[1] - 2 * s, 8.5 * s, 0, Math.PI * 2);
+  ctx.fill();
+  if (L.hairStyle !== 'bald') {
+    ctx.fillStyle = L.hair;
+    ctx.beginPath();
+    ctx.arc(H[0], H[1] - 4 * s, 8 * s, Math.PI, Math.PI * 2);
+    ctx.fill();
+  }
+  // closed eyes
+  ctx.strokeStyle = '#2b2350';
+  ctx.lineWidth = 1.2 * s;
+  for (const ex of [-3, 3]) {
+    ctx.beginPath();
+    ctx.moveTo(H[0] + ex * s - 1.5 * s, H[1]);
+    ctx.lineTo(H[0] + ex * s + 1.5 * s, H[1]);
+    ctx.stroke();
+  }
+  // blanket over the legs
+  ctx.lineWidth = 15 * s;
+  ctx.strokeStyle = 'rgba(93,120,179,0.92)';
+  const d = lerp(0.0), e = lerp(0.55);
+  ctx.beginPath();
+  ctx.moveTo(d[0], d[1]);
+  ctx.lineTo(e[0], e[1]);
+  ctx.stroke();
+}
+
+/** A thought or speech bubble with an emoji above a Mim's head. */
+export function drawBubble(ctx: CanvasRenderingContext2D, v: View, x: number, y: number, z: number, icon: string, kind: 'thought' | 'speech' = 'thought'): void {
+  const [sx, sy] = worldToScreen(v, x, y, z);
+  const r = Math.max(13, 17 * v.zoom);
+  const by = sy - r - 6;
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = 'rgba(43,35,80,0.5)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(sx, by, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  if (kind === 'thought') {
+    for (const [dx, dy, rr] of [[-r * 0.5, r * 1.05, r * 0.22], [-r * 0.75, r * 1.45, r * 0.12]]) {
+      ctx.beginPath();
+      ctx.arc(sx + dx, by + dy, rr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(sx - r * 0.3, by + r * 0.85);
+    ctx.lineTo(sx - r * 0.55, by + r * 1.5);
+    ctx.lineTo(sx + r * 0.05, by + r * 0.95);
+    ctx.fill();
+  }
+  ctx.font = `${Math.round(r * 1.1)}px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#2b2350';
+  ctx.fillText(icon, sx, by + 1);
   ctx.restore();
 }
