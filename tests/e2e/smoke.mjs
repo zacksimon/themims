@@ -20,7 +20,8 @@ await new Promise((res) => {
   setTimeout(res, 5000);
 });
 
-const scenario = (await import('./scenario.mjs')).default;
+const mod = await import('./scenario.mjs');
+const scenario = async (page, o) => { await mod.default(page, o); await mod.buildBuy(page, o); };
 let failed = false;
 const browser = await chromium.launch();
 try {
