@@ -10,6 +10,7 @@ export class Hud {
   private speedBtns: HTMLButtonElement[] = [];
   private wallBtns: Record<string, HTMLButtonElement> = {};
   private lastFunds = NaN;
+  private lastMinute = -1;
   readonly modeGroup = h('div', { class: 'group panel' });
   private toasts = h('div', { class: 'toasts' });
 
@@ -48,7 +49,11 @@ export class Hud {
 
   update(): void {
     const w = this.game.world;
-    this.clockEl.replaceChildren(h('b', {}, formatTime(w.time)), h('small', {}, `${weekdayOf(w.time)} · Day ${dayOf(w.time)}`));
+    const minute = Math.floor(w.time);
+    if (minute !== this.lastMinute) {
+      this.lastMinute = minute;
+      this.clockEl.replaceChildren(h('b', {}, formatTime(w.time)), h('small', {}, `${weekdayOf(w.time)} · Day ${dayOf(w.time)}`));
+    }
     if (w.funds !== this.lastFunds) {
       const up = w.funds > this.lastFunds;
       if (!Number.isNaN(this.lastFunds)) {
