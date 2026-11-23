@@ -17,6 +17,7 @@ Ideas that came up while reviewing milestones but are out of scope for the miles
 - **Fail-forward when interrupted:** When a desperate need interrupts an activity, the Mim drops what it's holding (the book on the floor, the TV left on) instead of quietly cancelling. Small leftover mess makes the house feel lived in.
 
 ### Social hooks (for M4)
+_Shared meals, sofa company and bathroom etiquette shipped in M4 (PR #8). Couples cuddling on the sofa is still open._
 - **Shared meals:** Mims eating at the same table chat on their own and gain Social and relationship.
 - **Sofa company:** Watching TV side by side gives a small Social trickle, and couples cuddle.
 - **Bathroom etiquette:** A Mim who walks into an occupied bathroom gets an embarrassed reaction and a short wait.
@@ -53,3 +54,28 @@ Ideas that came up while reviewing milestones but are out of scope for the miles
 ### Later
 - **Wall decorations:** Paintings and mirrors that hang on wall faces, using the same edge picking as doors and windows.
 - **Lot value:** Show home value (lot plus walls plus objects), which feeds into later goals and the bills system.
+
+## Household, social and voices (from M4 review, PR #8)
+
+### Conversations that feel alive
+- **Topics, not just icons:** Conversation bubbles cycle through topic pictures (🍕, 🐟, 👽, 📺, a portrait of another household member) instead of repeating the interaction icon. The listener reacts to each topic with 😂, 🤔 or 😒 based on a hidden "likes this topic" roll. This could grow into interests with traits later.
+- **Joining in:** A third Mim nearby can walk over and join a Chat or Joke, so conversations become little group scenes instead of strict pairs.
+- **Body language:** Gestures to match the bubble: arms up for High Five and Hug (an actual embrace pose), a lean-in for Gossip, a stomp for Argue, a slow-motion swing for Slap Fight. Right now both Mims stand still while the icons do all the work.
+- **Rejection beat:** On a rejection the target turns away or takes a step back, and the actor does a slump. The CONTENT.md rejection lines are great; show the line as a small caption over the pair even for free-will interactions (not just as a toast for player-queued ones), so watching the house is funny on its own.
+
+### Relationships with memory
+- **Memories:** Big moments (first Hug, a Slap Fight, a rejected Back Rub) are remembered as short entries on the Friends tab ("Mon: Gus insulted Pim's hair"). Mims bring them up later in Gossip and Argue.
+- **Gossip with a subject:** Gossip picks a specific absent Mim (shown in the bubble as their portrait) and changes the listener's opinion of them, instead of always the first other household member.
+- **Lifetime milestones:** A small notice and a sparkle when a pair becomes Friends or Best Friends, and a "rivals" notice when they hit Nemesis. Later these unlock interactions (Best Friend: "Secret Handshake"; Nemesis: "Prank").
+- **Mood-driven grudges:** A Mim who loses a Slap Fight sulks with a 😤 thought and avoids that Mim in free will for a few hours.
+
+### Voices
+- **Recognizable catchphrases:** Each Mim has one or two favorite "words" (fixed syllable pairs from their voice seed) that come back often, so players learn to recognize them by ear ("Bartley always says 'bim-loo'").
+- **Non-verbal sounds:** Laughs, sighs, gasps, a yawn, a grumpy "hmph" and a giggle, voiced with the same synth. They'd also cover object moments (a satisfied "ahh" on the sofa, a shriek at a cold shower).
+- **Whispered gossip and shouted arguments:** Gossip voiced quieter and breathier (more noise, less oscillator); Argue louder with overlapping turns.
+- **Voice preview in the Mim panel:** A little 🔈 next to the name plays a short line, and in Create-a-Mim (M5) players can tune pitch and tone with sliders.
+
+### Household UI
+- **Who's with whom:** A faint line or matching bubble color between two Mims mid-conversation, so it's clear who is talking to whom in a busy room.
+- **Relationship hover on Mims:** When a Mim is selected, hovering or long-pressing another Mim shows their relationship label and bar before opening the social menu.
+- **Recommended options:** Star the one or two social options most likely to be accepted right now, so the menu teaches the relationship and mood rules without the player reading numbers.
